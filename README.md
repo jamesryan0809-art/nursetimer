@@ -207,6 +207,10 @@ Xcode 16+ must complete each item.
   `firstDue`; all commit atomically. Pending-Mac tests: change Last Given; clear it; change
   it together with the schedule; and rollback of schedule/anchor/lastCompletedAt/nextDueAt
   after a simulated save failure.
+- ⬜ **Item 10 (banner on every reduction):** `replan()` shows the §4.3 banner on ANY
+  reduction (`plan.planWasReduced`), not only coalescing; the message distinguishes trimming
+  from grouping; never replaces an active error banner. Pending-Mac test: pre-alert trimming
+  or chain shortening WITHOUT grouping still produces the banner.
 
 ### Cross-cutting
 - ⬜ Dynamic Type scales legibly (rows readable at arm's length).

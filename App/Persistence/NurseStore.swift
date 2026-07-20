@@ -286,9 +286,10 @@ final class NurseStore {
         let displays = Dictionary(tasks.map { ($0.id, TaskDisplay(task: $0)) }, uniquingKeysWith: { a, _ in a })
         tasksNeedingRepair = Set(plan.tasksNeedingRepair)
         lastPlanWasCoalesced = plan.planWasCoalesced
-        // Item 10 broadens this from coalescing to ANY reduction (plan.planWasReduced).
-        if plan.planWasCoalesced {
-            setBanner(.remindersReduced(coalesced: true, groupCount: plan.coalescedGroupCount))
+        // Item 10: banner on ANY reduction (pre-alert trim, chain shortening, OR coalescing),
+        // not only grouping. setBanner keeps it from overwriting a visible error banner.
+        if plan.planWasReduced {
+            setBanner(.remindersReduced(coalesced: plan.planWasCoalesced, groupCount: plan.coalescedGroupCount))
         }
         scheduler.apply(plan: plan, displays: displays)
     }
