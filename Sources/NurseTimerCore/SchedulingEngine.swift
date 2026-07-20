@@ -151,4 +151,49 @@ public enum SchedulingEngine {
         }
         return result
     }
+
+    /// The tapered post-due re-ping chain (spec §4.2, item 3). Pure function of the
+    /// anchor, snooze interval, `now`, the horizon, and the taper parameters — **no
+    /// stored phase state**:
+    ///
+    /// - Phase 1: `fastCount` pings at the snooze interval `S` (anchor+S … anchor+fastCount·S).
+    /// - Phase 2: `midCount` pings at `midIntervalMinutes`.
+    /// - Phase 3: `slowIntervalMinutes` spacing to the horizon (the "indefinite" slow phase).
+    ///
+    /// Indices are 1-based positions from the anchor (stable regardless of `now`, so the
+    /// identifiers survive re-plans). The returned pings are the subset strictly after
+    /// `now` and at or before `horizonEnd` (the sliding window). Pass `anchor = dueDate`
+    /// for a natural overdue task, or `anchor = the Snooze tap time` to re-anchor the
+    /// whole taper at Phase 1 from the tap.
+    public static func taperChain(
+        anchor: Date,
+        snoozeMinutes: Int,
+        after now: Date,
+        until horizonEnd: Date,
+        settings: SchedulerSettings
+    ) -> [(index: Int, date: Date)] {
+        guard snoozeMinutes > 0 else { return [] }
+        let s = Double(snoozeMinutes) * 60
+        let mid = Double(settings.midIntervalMinutes) * 60
+        let slow = Double(settings.slowIntervalMinutes) * 60
+
+        var times: [Date] = []
+        var t = anchor
+        for _ in 0..<max(0, settings.fastCount) { t = t.addingTimeInterval(s); times.append(t) }
+        for _ in 0..<max(0, settings.midCount) { t = t.addingTimeInterval(mid); times.append(t) }
+        // Phase 3 to the horizon (bounded by a guard so a degenerate slow interval can't loop).
+        var guardCount = 0
+        while guardCount < 5000 {
+            t = t.addingTimeInterval(slow)
+            if t > horizonEnd { break }
+            times.append(t)
+            guardCount += 1
+        }
+
+        var result: [(index: Int, date: Date)] = []
+        for (i, date) in times.enumerated() where date > now && date <= horizonEnd {
+            result.append((index: i + 1, date: date))
+        }
+        return result
+    }
 }

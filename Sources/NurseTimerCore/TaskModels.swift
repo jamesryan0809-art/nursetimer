@@ -199,6 +199,14 @@ public struct SchedulerSettings: Equatable, Sendable {
     /// into a single repair digest so unbounded repair counts can't breach the cap (item 2).
     public var repairDigestThreshold: Int
 
+    // Post-due taper (item 3). Phase 1: `fastCount` pings at the snooze interval;
+    // Phase 2: `midCount` pings at `midIntervalMinutes`; Phase 3: `slowIntervalMinutes`
+    // spacing to the horizon.
+    public var fastCount: Int
+    public var midIntervalMinutes: Int
+    public var midCount: Int
+    public var slowIntervalMinutes: Int
+
     public init(
         defaultLeadTimeMinutes: Int = 15,
         defaultSnoozeMinutes: Int = 3,
@@ -206,7 +214,11 @@ public struct SchedulerSettings: Equatable, Sendable {
         snoozeChainLength: Int = 20,
         maxPlanNotifications: Int = 60,
         minSnoozeDepth: Int = 5,
-        repairDigestThreshold: Int = 5
+        repairDigestThreshold: Int = 5,
+        fastCount: Int = 5,
+        midIntervalMinutes: Int = 15,
+        midCount: Int = 5,
+        slowIntervalMinutes: Int = 30
     ) {
         self.defaultLeadTimeMinutes = defaultLeadTimeMinutes
         self.defaultSnoozeMinutes = defaultSnoozeMinutes
@@ -215,6 +227,10 @@ public struct SchedulerSettings: Equatable, Sendable {
         self.maxPlanNotifications = maxPlanNotifications
         self.minSnoozeDepth = minSnoozeDepth
         self.repairDigestThreshold = repairDigestThreshold
+        self.fastCount = fastCount
+        self.midIntervalMinutes = midIntervalMinutes
+        self.midCount = midCount
+        self.slowIntervalMinutes = slowIntervalMinutes
     }
 
     public static let `default` = SchedulerSettings()
@@ -235,6 +251,10 @@ public struct SchedulerSettings: Equatable, Sendable {
         fix(\.defaultSnoozeMinutes, defaultSnoozeMinutes >= 1, 3)
         fix(\.defaultLeadTimeMinutes, defaultLeadTimeMinutes >= 0, 15)
         fix(\.repairDigestThreshold, repairDigestThreshold >= 1, 5)
+        fix(\.fastCount, fastCount >= 1, 5)
+        fix(\.midIntervalMinutes, midIntervalMinutes >= 1, 15)
+        fix(\.midCount, midCount >= 0, 5)
+        fix(\.slowIntervalMinutes, slowIntervalMinutes >= 1, 30)
         // Keep the chain floor within the cap.
         if s.minSnoozeDepth > s.maxPlanNotifications { s.minSnoozeDepth = 5; adjusted = true }
         return (s, adjusted)

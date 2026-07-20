@@ -101,7 +101,8 @@ final class ScheduleRepairTests: XCTestCase {
 
         let plan = NotificationPlanner.plan(tasks: [broken, good], settings: .default, now: now, calendar: cal)
         // The healthy sibling still schedules its pre + due; the broken one gets a warning.
-        XCTAssertEqual(plan.notifications.filter { $0.taskID == goodID }.map { $0.kind }, [.pre, .due])
+        let goodKinds = plan.notifications.filter { $0.taskID == goodID }.map { $0.kind }
+        XCTAssertTrue(goodKinds.contains(.pre) && goodKinds.contains(.due))
         XCTAssertTrue(plan.notifications.contains { $0.kind == .repairWarning && $0.taskID == id1 })
         XCTAssertEqual(plan.tasksNeedingRepair, [id1])
     }
@@ -132,8 +133,8 @@ final class ScheduleRepairTests: XCTestCase {
 
         let plan = NotificationPlanner.plan(tasks: [repaired], settings: .default, now: now, calendar: cal)
         XCTAssertTrue(plan.tasksNeedingRepair.isEmpty)                // no longer flagged
-        XCTAssertEqual(plan.notifications.map { $0.kind }, [.pre, .due])
-        XCTAssertEqual(plan.notifications.last?.fireDate, freshDue)   // scheduled at the fresh due
+        XCTAssertTrue(plan.notifications.contains { $0.kind == .pre })
+        XCTAssertEqual(plan.notifications.first { $0.kind == .due }?.fireDate, freshDue)  // due at the fresh time
     }
 
     // MARK: Deterministic repair-warning identifier

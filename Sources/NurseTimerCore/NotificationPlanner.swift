@@ -187,6 +187,19 @@ public enum NotificationPlanner {
             let snooze = SchedulingEngine.effectiveSnoozeMinutes(task, settings)
             let window = windowStart(of: due, calendar)
 
+            // The post-due tapered chain is pre-scheduled for EVERY occurrence in the
+            // horizon (item 3) — an upcoming task's taper is planned now so the app never
+            // has to foreground after the due alert for re-pings to begin. Anchor re-anchors
+            // at a Snooze tap.
+            let anchor = task.explicitSnoozeAt ?? due
+            let taper = SchedulingEngine.taperChain(
+                anchor: anchor, snoozeMinutes: snooze, after: now, until: horizonEnd, settings: settings)
+            let chain = taper.map { ping in
+                PlannedNotification(
+                    identifier: identifier(taskID: task.id, due: due, slot: .snooze(ping.index)),
+                    fireDate: ping.date, payload: .task(taskID: task.id, dueDate: due, slot: .snooze(ping.index)))
+            }
+
             if due >= now {
                 guard due <= horizonEnd else { continue }
                 var pre: PlannedNotification?
@@ -201,21 +214,12 @@ public enum NotificationPlanner {
                     fireDate: due, payload: .task(taskID: task.id, dueDate: due, slot: .due))
                 entries.append(TaskEntry(id: task.id, room: task.roomNumber, dueDate: due,
                                          windowStart: window, category: .upcoming,
-                                         pre: pre, due: dueNotif, chain: []))
+                                         pre: pre, due: dueNotif, chain: chain))
             } else {
-                let anchor = task.explicitSnoozeAt ?? due
-                let chain = SchedulingEngine.snoozeChain(
-                    anchor: anchor, snoozeMinutes: snooze, after: now, count: settings.snoozeChainLength)
-                var pings: [PlannedNotification] = []
-                for ping in chain where ping.date <= horizonEnd {
-                    pings.append(PlannedNotification(
-                        identifier: identifier(taskID: task.id, due: due, slot: .snooze(ping.index)),
-                        fireDate: ping.date, payload: .task(taskID: task.id, dueDate: due, slot: .snooze(ping.index))))
-                }
-                guard !pings.isEmpty else { continue }
+                guard !chain.isEmpty else { continue }   // overdue but no future pings left in horizon
                 entries.append(TaskEntry(id: task.id, room: task.roomNumber, dueDate: due,
                                          windowStart: window, category: .overdue,
-                                         pre: nil, due: nil, chain: pings))
+                                         pre: nil, due: nil, chain: chain))
             }
         }
 

@@ -59,11 +59,30 @@ final class NotificationPlannerTests: XCTestCase {
         let plan = NotificationPlanner.plan(
             tasks: [TaskSnapshot(id: taskID1, scheduleType: everyHr(4), nextDueAt: due)],
             settings: .default, now: now, calendar: cal)
-        XCTAssertEqual(kinds(plan), [.pre, .due])
-        XCTAssertFalse(plan.wasTrimmed)
-        XCTAssertFalse(plan.planWasCoalesced)
-        XCTAssertEqual(plan.notifications[0].fireDate, dt(cal, 2026, 7, 19, 16, 15))   // due − 15
-        XCTAssertEqual(plan.notifications[1].fireDate, due)
+        // Item 3: an upcoming task emits pre, due, AND its pre-scheduled post-due taper.
+        XCTAssertEqual(plan.notifications[0].fireDate, dt(cal, 2026, 7, 19, 16, 15))   // pre = due − 15
+        XCTAssertEqual(plan.notifications[0].kind, .pre)
+        XCTAssertEqual(plan.notifications[1].fireDate, due)                            // due
+        XCTAssertEqual(plan.notifications[1].kind, .due)
+        XCTAssertTrue(plan.notifications.contains { $0.kind == .snooze })              // taper pre-scheduled
+        XCTAssertTrue(plan.notifications.allSatisfy { $0.taskID == taskID1 })
+        XCTAssertFalse(plan.planWasCoalesced)                                          // one task fits
+    }
+
+    func test_futureDueTask_emitsPreDueAndTaperPings() {
+        // Item 3: a future-due task is planned WITH its post-due taper at replan time —
+        // pre, due, then Phase-1 pings at due+3/6/9… (no need to foreground first).
+        let cal = utcCalendar()
+        let now = dt(cal, 2026, 7, 19, 16, 0)
+        let due = dt(cal, 2026, 7, 19, 16, 30)
+        let plan = NotificationPlanner.plan(
+            tasks: [TaskSnapshot(id: taskID1, scheduleType: everyHr(4), nextDueAt: due)],
+            settings: .default, now: now, calendar: cal)
+        XCTAssertEqual(plan.notifications.first { $0.kind == .pre }?.fireDate, due - 15 * 60)
+        XCTAssertEqual(plan.notifications.first { $0.kind == .due }?.fireDate, due)
+        let taper = plan.notifications.filter { $0.kind == .snooze }.map { $0.fireDate }.sorted()
+        XCTAssertEqual(Array(taper.prefix(3)), (1...3).map { due + Double($0) * 3 * 60 })
+        XCTAssertTrue(plan.notifications.filter { $0.kind == .snooze }.allSatisfy { $0.dueDate == due })
     }
 
     func test_upcomingTask_preAlreadyPast_schedulesDueOnly() {
@@ -72,7 +91,9 @@ final class NotificationPlannerTests: XCTestCase {
         let plan = NotificationPlanner.plan(
             tasks: [TaskSnapshot(id: taskID1, scheduleType: everyHr(4), nextDueAt: dt(cal, 2026, 7, 19, 16, 5))],
             settings: .default, now: now, calendar: cal)
-        XCTAssertEqual(kinds(plan), [.due])
+        XCTAssertFalse(plan.notifications.contains { $0.kind == .pre })   // pre already past
+        XCTAssertEqual(plan.notifications.first?.kind, .due)
+        XCTAssertTrue(plan.notifications.contains { $0.kind == .snooze }) // taper still pre-scheduled
     }
 
     // MARK: 12h horizon
@@ -92,7 +113,8 @@ final class NotificationPlannerTests: XCTestCase {
         let plan = NotificationPlanner.plan(
             tasks: [TaskSnapshot(id: taskID1, scheduleType: everyHr(4), nextDueAt: now + 11 * 3600)],
             settings: .default, now: now, calendar: cal)
-        XCTAssertEqual(kinds(plan), [.pre, .due])
+        XCTAssertTrue(plan.notifications.contains { $0.kind == .pre })
+        XCTAssertTrue(plan.notifications.contains { $0.kind == .due })
     }
 
     // MARK: Overdue snooze chain + action cancels it
@@ -104,20 +126,24 @@ final class NotificationPlannerTests: XCTestCase {
         let plan = NotificationPlanner.plan(
             tasks: [TaskSnapshot(id: taskID1, scheduleType: everyHr(4), nextDueAt: due)],
             settings: .default, now: now, calendar: cal)
-        XCTAssertEqual(plan.notifications.count, 20)
+        // Overdue task → tapered chain only (no pre/due). First ping is due + 3 min (Phase 1).
         XCTAssertTrue(plan.notifications.allSatisfy { $0.kind == .snooze })
         XCTAssertTrue(plan.notifications.allSatisfy { $0.dueDate == due })
+        XCTAssertGreaterThanOrEqual(plan.notifications.count, 5)     // at least the floor
+        XCTAssertEqual(plan.notifications.first?.fireDate, due + 3 * 60)
     }
 
-    func test_actingOnTask_movesDueToFuture_dropsSnoozeChain() {
+    func test_actingOnTask_reAnchorsToNewFutureDue() {
         let cal = utcCalendar()
         let now = dt(cal, 2026, 7, 19, 16, 0) + 120
         let newDue = SchedulingEngine.nextDueAfterCompletion(schedule: everyHr(4), completedAt: now, calendar: cal)!
         let plan = NotificationPlanner.plan(
             tasks: [TaskSnapshot(id: taskID1, scheduleType: everyHr(4), lastCompletedAt: now, nextDueAt: newDue)],
             settings: .default, now: now, calendar: cal)
-        XCTAssertEqual(kinds(plan), [.pre, .due])
-        XCTAssertFalse(plan.notifications.contains { $0.kind == .snooze })
+        // The old overdue chain is gone; everything is anchored to the NEW future due.
+        XCTAssertTrue(plan.notifications.contains { $0.kind == .pre })
+        XCTAssertTrue(plan.notifications.contains { $0.kind == .due })
+        XCTAssertTrue(plan.notifications.allSatisfy { $0.dueDate == newDue })
     }
 
     func test_explicitSnooze_reAnchorsChainToTapTime() {
@@ -154,16 +180,18 @@ final class NotificationPlannerTests: XCTestCase {
     }
 
     func test_belowCap_notTrimmedNotCoalesced() {
+        // One task's pre + due + full taper stays under the cap → no reduction at all.
         let cal = utcCalendar()
         let now = dt(cal, 2026, 7, 19, 8, 0)
-        let tasks = (0..<10).map { i in
-            TaskSnapshot(id: UUID(), scheduleType: everyHr(4),
-                         nextDueAt: now + Double((i + 1) * 10 * 60), leadTimeMinutes: 5)
-        }
-        let plan = NotificationPlanner.plan(tasks: tasks, settings: .default, now: now, calendar: cal)
-        XCTAssertEqual(plan.notifications.count, 20)
+        let task = TaskSnapshot(id: taskID1, scheduleType: everyHr(4),
+                                nextDueAt: now + 10 * 60, leadTimeMinutes: 5)
+        let plan = NotificationPlanner.plan(tasks: [task], settings: .default, now: now, calendar: cal)
+        XCTAssertLessThanOrEqual(plan.notifications.count, 60)
         XCTAssertFalse(plan.wasTrimmed)
         XCTAssertFalse(plan.planWasCoalesced)
+        XCTAssertTrue(plan.notifications.contains { $0.kind == .pre })
+        XCTAssertTrue(plan.notifications.contains { $0.kind == .due })
+        XCTAssertTrue(plan.notifications.contains { $0.kind == .snooze })
     }
 
     // MARK: Hard 60-cap invariant (spec §4.3)
@@ -171,15 +199,13 @@ final class NotificationPlannerTests: XCTestCase {
     func test_hardCap_neverExceeded_atVariousLoads() {
         let cal = utcCalendar()
         let now = dt(cal, 2026, 7, 19, 8, 0)
+        // With pre-scheduled tapers the baseline is high, so the cap + representation
+        // invariants are what matter at every load (grouping timing is load-dependent).
         for n in [0, 59, 60, 61, 120, 500] {
             let tasks = upcomingNoPre(n, now: now, rooms: 7, windows: 24)
             let plan = NotificationPlanner.plan(tasks: tasks, settings: .default, now: now, calendar: cal)
             XCTAssertLessThanOrEqual(plan.notifications.count, 60, "load \(n) exceeded cap")
-            // No due time unrepresented: every task appears somewhere in the plan.
             XCTAssertEqual(represented(plan), Set(tasks.map { $0.id }), "load \(n) lost a task")
-            // Coalescing only kicks in above the cap.
-            if n <= 60 { XCTAssertFalse(plan.planWasCoalesced, "load \(n) coalesced early") }
-            else { XCTAssertTrue(plan.planWasCoalesced, "load \(n) failed to coalesce") }
         }
     }
 
@@ -195,23 +221,20 @@ final class NotificationPlannerTests: XCTestCase {
 
     // MARK: Reduction order a → d
 
-    func test_stepA_trimsFurthestPreAlertsFirst() {
-        // 31 tasks → 31 pre + 31 due = 62. Trimming 2 furthest pre reaches 60; no grouping.
+    func test_reductionOrder_preAlertsTrimmedBeforeGrouping() {
+        // Reduction order guarantees pre-alerts are dropped before any coalescing — so if
+        // the plan coalesced, no pre-alert survives (item 1/3 reduction order).
         let cal = utcCalendar()
         let now = dt(cal, 2026, 7, 19, 8, 0)
-        var tasks: [TaskSnapshot] = []
-        for i in 0..<31 {
-            tasks.append(TaskSnapshot(id: UUID(), scheduleType: everyHr(4),
-                                      nextDueAt: now + Double((i + 1) * 10 * 60), leadTimeMinutes: 5))
+        let tasks = (0..<40).map { i in
+            TaskSnapshot(id: UUID(), roomNumber: "R\(i % 6)", scheduleType: everyHr(4),
+                         nextDueAt: now + Double((i + 1) * 5 * 60), leadTimeMinutes: 5)
         }
         let plan = NotificationPlanner.plan(tasks: tasks, settings: .default, now: now, calendar: cal)
-        XCTAssertEqual(plan.notifications.count, 60)
-        XCTAssertTrue(plan.wasTrimmed)
-        XCTAssertFalse(plan.planWasCoalesced)
-        XCTAssertEqual(plan.notifications.filter { $0.kind == .due }.count, 31)   // no due dropped
-        XCTAssertEqual(plan.notifications.filter { $0.kind == .pre }.count, 29)   // 2 furthest pre trimmed
-        let furthest = tasks.max { $0.nextDueAt! < $1.nextDueAt! }!
-        XCTAssertFalse(plan.notifications.contains { $0.taskID == furthest.id && $0.kind == .pre })
+        XCTAssertTrue(plan.planWasCoalesced)                                   // this load must group
+        XCTAssertFalse(plan.notifications.contains { $0.kind == .pre })        // pre trimmed first
+        XCTAssertLessThanOrEqual(plan.notifications.count, 60)
+        XCTAssertEqual(represented(plan), Set(tasks.map { $0.id }))
     }
 
     func test_stepB_reducesSnoozeDepthUniformly_downToFloor() {
