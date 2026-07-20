@@ -16,7 +16,7 @@ struct ScheduleView: View {
             from: .now, calendar: .autoupdatingCurrent)
     }
 
-    private var byHour: [(hour: String, items: [ScheduleOccurrence])] {
+    private var byHour: [(bucket: Date, label: String, items: [ScheduleOccurrence])] {
         let cal = Calendar.autoupdatingCurrent
         let groups = Dictionary(grouping: occurrences) { occ -> Date in
             var c = cal.dateComponents([.year, .month, .day, .hour], from: occ.date)
@@ -24,7 +24,9 @@ struct ScheduleView: View {
             return cal.date(from: c) ?? occ.date
         }
         return groups.keys.sorted().map { key in
-            (hour: key.formatted(.dateTime.hour().minute()), items: groups[key]!.sorted { $0.date < $1.date })
+            // Identity is the hour-bucket Date (unique across dates); label is display only.
+            (bucket: key, label: key.formatted(.dateTime.hour().minute()),
+             items: groups[key]!.sorted { $0.date < $1.date })
         }
     }
 
@@ -36,14 +38,14 @@ struct ScheduleView: View {
                                            description: Text("Projected doses for the next 24 hours will appear here."))
                 } else {
                     List {
-                        ForEach(byHour, id: \.hour) { group in
+                        ForEach(byHour, id: \.bucket) { group in
                             Section {
                                 if isCluster(group.items) {
                                     ClusterBadge(items: group.items)
                                 }
                                 ForEach(group.items) { occ in OccurrenceRow(occ: occ) }
                             } header: {
-                                Text(group.hour).font(.headline)
+                                Text(group.label).font(.headline)
                             }
                         }
                     }

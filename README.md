@@ -211,6 +211,10 @@ Xcode 16+ must complete each item.
   reduction (`plan.planWasReduced`), not only coalescing; the message distinguishes trimming
   from grouping; never replaces an active error banner. Pending-Mac test: pre-alert trimming
   or chain shortening WITHOUT grouping still produces the banner.
+- ⬜ **Item 11 (hour-bucket identity):** Schedule sections use the hour-bucket `Date` as
+  `ForEach` identity (label is display-only); `ScheduleOccurrence.id` is task+time derived,
+  not a fresh UUID. Pending-Mac test: equal clock-hour buckets on consecutive dates render
+  as distinct sections.
 
 ### Cross-cutting
 - ⬜ Dynamic Type scales legibly (rows readable at arm's length).

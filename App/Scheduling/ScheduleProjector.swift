@@ -5,7 +5,9 @@ import NurseTimerModels
 /// One projected future occurrence rendered on the Schedule tab. Projections are
 /// computed from each task's schedule — they are NEVER persisted as task events.
 struct ScheduleOccurrence: Identifiable {
-    let id = UUID()
+    /// Stable identity derived from the task + occurrence time (never display text or a
+    /// fresh UUID), so SwiftUI keeps rows stable across recomputes (item 11/12).
+    var id: String { "\(taskID.uuidString)|\(Int(date.timeIntervalSince1970))" }
     let date: Date
     let taskID: UUID
     let room: String
