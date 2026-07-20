@@ -112,8 +112,33 @@ Xcode 16+ must complete each item.
 
 ### Core (already verified where noted)
 - ✅ Swift XCTest suite: **58 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
-- ⬜ SwiftData model-container initialization.
-- ⬜ CRUD persistence survives relaunch.
+- ⬜ SwiftData model-container initialization (`PersistenceController.makeContainer`).
+- ⬜ Store file is `FileProtectionType.complete` at rest.
+- ⬜ CRUD persistence (patients, tasks, events, settings) survives relaunch.
+
+### iPhone app — Milestone 2 (authored, uncompiled)
+- ⬜ Tabs Board / Schedule / Log render; system colors/typography; status-only color.
+- ⬜ Patient list: add / edit / deactivate / reactivate / delete (with confirm).
+- ⬜ Add/Edit Task form: type, title (+ generic quick-picks), dosage/route (med only),
+  schedule modes (interval / fixed / once / PRN), last-given, lead/snooze overrides, pause.
+- ⬜ Interval picker cannot submit 0 / negative / <5m / >24h.
+- ⬜ Given/Done writes an event, sets `lastCompletedAt`, recomputes `nextDueAt`
+  (interval re-anchors to actual time; fixed advances; once auto-pauses; PRN stays nil),
+  clears `explicitSnoozeAt`.
+- ⬜ Snooze / Skip / Pause / Resume / Missed-ack behave per spec.
+- ⬜ Board: overdue red, due-soon orange, Up Next strip, ordering, empty state, refresh
+  after every action; repair tasks pinned on top and open the repair flow.
+- ⬜ Schedule: projected interval + fixed occurrences; projections visually distinct from
+  events; PRN/paused/completed-once/needsRepair excluded; nothing persisted as an event.
+- ⬜ Log: reverse-chron events, per-patient filter, empty state (no export).
+- ⬜ Notifications: authorization request; pre/due/snooze delivery; deterministic ids;
+  full replan on change + foreground; obsolete requests removed/replaced; budget respected.
+- ⬜ Notification actions Given / Snooze / Skip (Snooze primary) update persistence when
+  used foregrounded, backgrounded, and terminated.
+- ⬜ Repair-warning notification uses the deterministic per-task id (no duplicates) and is
+  removed after repair.
+- ⬜ Safety-relevant failures (scheduling / persistence / registration) surface as banners
+  + os_log, never silently dropped.
 
 ### Behavior Core enforces that the UI must honor
 - **Interval schedule picker (BUILD_SPEC §6.2):** the "Every N" mode must be an

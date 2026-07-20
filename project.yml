@@ -38,7 +38,6 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.9"
     GENERATE_INFOPLIST_FILE: NO
-    SWIFT_STRICT_CONCURRENCY: complete
 
 targets:
 
