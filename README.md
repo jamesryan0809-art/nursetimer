@@ -91,6 +91,12 @@ their team locally. Info.plist and `.entitlements` templates are checked in unde
 
 No machine-specific signing data or Xcode user state is committed (`.gitignore`).
 
+**App icon** ("stethoscope clock") is authored as vector at [Icon/AppIcon.svg](Icon/AppIcon.svg)
+and rasterized into all three targets' `Assets.xcassets/AppIcon.appiconset` by
+[Icon/generate-icons.sh](Icon/generate-icons.sh) (needs `rsvg-convert`, e.g.
+`brew install librsvg`). Both the SVG and the generated PNGs are checked in; re-run the
+script after editing the SVG.
+
 ---
 
 ## Verify on Mac
@@ -109,6 +115,7 @@ Xcode 16+ must complete each item.
 - ⬜ watchOS app target compiles.
 - ⬜ Widget extension compiles.
 - ⬜ Signing teams selected locally; bundle IDs / entitlements / companion config valid.
+- ⬜ App icon renders on iOS, Watch, and Widget (generated from `Icon/AppIcon.svg`).
 
 ### Core (already verified where noted)
 - ✅ Swift XCTest suite: **58 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
@@ -122,6 +129,8 @@ Xcode 16+ must complete each item.
 - ⬜ Add/Edit Task form: type, title (+ generic quick-picks), dosage/route (med only),
   schedule modes (interval / fixed / once / PRN), last-given, lead/snooze overrides, pause.
 - ⬜ Interval picker cannot submit 0 / negative / <5m / >24h.
+- ⬜ Add/Edit form shows a live preview beneath the schedule controls: "First reminder"
+  (interval, no last-given) / "Next due" (interval, last-given set) / "Next" (fixed times).
 - ⬜ Given/Done writes an event, sets `lastCompletedAt`, recomputes `nextDueAt`
   (interval re-anchors to actual time; fixed advances; once auto-pauses; PRN stays nil),
   clears `explicitSnoozeAt`.

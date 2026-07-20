@@ -7,6 +7,9 @@ import NurseTimerCore
 struct SchedulePickerView: View {
     @Binding var draft: ScheduleDraft
     var requireSelection: Bool
+    /// The form's current last-given value (nil when the toggle is off) — drives the
+    /// first-reminder / next-due preview.
+    var lastGiven: Date?
 
     var body: some View {
         Section("Schedule") {
@@ -29,7 +32,42 @@ struct SchedulePickerView: View {
             case .prn:      Text("No automatic reminders. Give as needed.").font(.footnote).foregroundStyle(.secondary)
             case nil:       Text("A schedule is required.").font(.footnote).foregroundStyle(.red)
             }
+
+            // Live preview of the schedule's consequence, so the "anchor to now"
+            // assumption is never invisible. Computed via the SAME Core path the store
+            // uses (SchedulingEngine.firstDue) — no duplicated date math here.
+            if let preview {
+                LabeledContent(preview.label, value: preview.value)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("\(preview.label): \(preview.value)")
+            }
         }
+    }
+
+    private var preview: (label: String, value: String)? {
+        let cal = Calendar.autoupdatingCurrent
+        switch draft.mode {
+        case .interval:
+            guard draft.intervalIsValid, let schedule = draft.scheduleType,
+                  let due = SchedulingEngine.firstDue(for: schedule, anchor: lastGiven ?? .now, calendar: cal)
+            else { return nil }
+            return (lastGiven == nil ? "First reminder" : "Next due", Self.humanTime(due, cal))
+        case .fixed:
+            guard let schedule = draft.scheduleType,
+                  let due = SchedulingEngine.firstDue(for: schedule, anchor: .now, calendar: cal)
+            else { return nil }
+            return ("Next", Self.humanTime(due, cal))
+        case .once, .prn, .none:
+            return nil   // pickers already convey these
+        }
+    }
+
+    private static func humanTime(_ date: Date, _ cal: Calendar) -> String {
+        let time = date.formatted(date: .omitted, time: .shortened)
+        if cal.isDateInToday(date) { return "today \(time)" }
+        if cal.isDateInTomorrow(date) { return "tomorrow \(time)" }
+        return date.formatted(.dateTime.weekday(.abbreviated).hour().minute())
     }
 
     // MARK: Interval — bounded so 0/negatives/over-24h/under-5m are unreachable

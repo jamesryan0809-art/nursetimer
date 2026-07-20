@@ -82,7 +82,8 @@ struct TaskEditView: View {
                 }
             }
 
-            SchedulePickerView(draft: $draft, requireSelection: target.isRepair)
+            SchedulePickerView(draft: $draft, requireSelection: target.isRepair,
+                               lastGiven: setLastGiven ? lastGiven : nil)
 
             Section("Last given (optional)") {
                 Toggle("Set last-given time", isOn: $setLastGiven)

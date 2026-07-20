@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Full-bleed deep teal background; iOS applies its own corner mask. -->
+  <rect width="1024" height="1024" fill="#0F766E"/>
+
+  <g fill="none" stroke="#F8FAFC" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Stethoscope tubing = the clock's circular frame, drawn as an OPEN ring whose
+         two ends rise into a splayed Y of earpiece stems at the top. -->
+    <path d="M376 132 L416 257 A280 280 0 1 0 608 257 L648 132" stroke-width="66"/>
+
+    <!-- Short tube dropping from the bottom of the ring to the chestpiece. -->
+    <path d="M512 800 L512 872" stroke-width="46"/>
+
+    <!-- Minimal clock face: hour + minute hands at 10:10 (no numerals). -->
+    <line x1="512" y1="520" x2="407" y2="446" stroke-width="42"/>
+    <line x1="512" y1="520" x2="664" y2="432" stroke-width="32"/>
+  </g>
+
+  <!-- Chestpiece / diaphragm: filled disc with a thin inner ring. -->
+  <circle cx="512" cy="905" r="66" fill="#F8FAFC"/>
+  <circle cx="512" cy="905" r="43" fill="none" stroke="#0F766E" stroke-width="9"/>
+
+  <!-- Clock center dot. -->
+  <circle cx="512" cy="520" r="27" fill="#F8FAFC"/>
+</svg>
