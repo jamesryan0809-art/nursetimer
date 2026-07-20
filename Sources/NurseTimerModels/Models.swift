@@ -113,8 +113,27 @@ extension CareTask: SchedulableTask {
     public var kind: TaskKind { TaskKind(rawValue: kindRaw) ?? .generic }
 
     public var scheduleType: ScheduleType {
-        get { (try? JSONDecoder().decode(ScheduleType.self, from: scheduleData)) ?? .prn }
+        // Fail LOUD: an undecodable payload becomes `.needsRepair` (carrying the raw
+        // bytes), never a silent `.prn`. Quarantined per-task (spec §4.1).
+        get { ScheduleType.decode(fromStore: scheduleData) }
         set { scheduleData = (try? JSONEncoder().encode(newValue)) ?? Data() }
+    }
+}
+
+extension CareTask {
+    /// True iff the persisted schedule failed to decode and awaits manual repair.
+    public var scheduleNeedsRepair: Bool { scheduleType.isNeedsRepair }
+
+    /// Apply a nurse-selected repair: set a new valid schedule and establish a FRESH
+    /// `nextDueAt` from `anchor` (last-given time, or now). Clears the repair state
+    /// (the schedule is valid again) and never reuses the old, untrusted `nextDueAt`
+    /// (spec §6.2). The app then removes the task's pending repair warning.
+    public func repair(with schedule: ScheduleType, anchor: Date, calendar: Calendar = .current) {
+        precondition(!schedule.isNeedsRepair, "Repair schedule must be valid, not .needsRepair")
+        self.scheduleType = schedule
+        self.nextDueAt = SchedulingEngine.firstDue(for: schedule, anchor: anchor, calendar: calendar)
+        self.explicitSnoozeAt = nil
+        self.updatedAt = anchor
     }
 }
 

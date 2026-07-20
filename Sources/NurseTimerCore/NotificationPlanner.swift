@@ -40,10 +40,14 @@ public struct PlannedNotification: Equatable, Sendable {
 public struct NotificationPlan: Equatable, Sendable {
     public let notifications: [PlannedNotification]
     public let trimmed: Bool
+    /// IDs of tasks whose schedule failed to decode (`.needsRepair`). They contribute
+    /// zero notifications; the app layer surfaces them for manual repair (spec §4.1/§6.3).
+    public let tasksNeedingRepair: [UUID]
 
-    public init(notifications: [PlannedNotification], trimmed: Bool) {
+    public init(notifications: [PlannedNotification], trimmed: Bool, tasksNeedingRepair: [UUID] = []) {
         self.notifications = notifications
         self.trimmed = trimmed
+        self.tasksNeedingRepair = tasksNeedingRepair
     }
 }
 
@@ -66,6 +70,14 @@ public enum NotificationPlanner {
         "\(taskID.uuidString)|\(iso.string(from: due))|\(slot.token)"
     }
 
+    /// Deterministic, per-task identifier for the "schedule couldn't be loaded"
+    /// warning (spec §6.3). Stable across re-detections so a repeated failure
+    /// *replaces* the existing warning instead of stacking duplicates; the app
+    /// removes it once the task drops out of `tasksNeedingRepair`.
+    public static func repairWarningIdentifier(taskID: UUID) -> String {
+        "repair|\(taskID.uuidString)"
+    }
+
     /// Build the pending plan.
     ///
     /// Per task within the 12h horizon:
@@ -84,8 +96,17 @@ public enum NotificationPlanner {
     ) -> NotificationPlan {
         let horizonEnd = now.addingTimeInterval(settings.horizonHours * 3600)
         var notifications: [PlannedNotification] = []
+        var tasksNeedingRepair: [UUID] = []
 
         for task in tasks {
+            // Reject an undecodable schedule BEFORE trusting nextDueAt: a needsRepair
+            // task's stored nextDueAt is not trustworthy, so it schedules nothing and
+            // is surfaced for repair instead (spec §4.1). Flagged even when paused —
+            // corruption is a data-integrity issue independent of hold state.
+            if task.scheduleType.isNeedsRepair {
+                tasksNeedingRepair.append(task.id)
+                continue
+            }
             guard !task.isPaused, let due = task.nextDueAt else { continue }
 
             let lead = SchedulingEngine.effectiveLeadMinutes(task, settings)
@@ -121,7 +142,10 @@ public enum NotificationPlanner {
         // Trim to the OS budget (spec §4.3).
         let (kept, trimmed) = applyBudget(notifications, settings: settings)
         // Deterministic ordering by fire time for stable, testable output.
-        return NotificationPlan(notifications: kept.sorted { $0.fireDate < $1.fireDate }, trimmed: trimmed)
+        return NotificationPlan(
+            notifications: kept.sorted { $0.fireDate < $1.fireDate },
+            trimmed: trimmed,
+            tasksNeedingRepair: tasksNeedingRepair)
     }
 
     // MARK: Budget trimming

@@ -71,11 +71,39 @@ public enum ScheduleType: Codable, Equatable, Hashable, Sendable {
     case once(Date)
     /// As-needed. Never auto-schedules.
     case prn
+    /// A schedule that could NOT be decoded from the store, carrying the raw
+    /// undecodable bytes for diagnostics. A task in this state schedules **no**
+    /// reminders and is surfaced for manual repair — decode failure is explicit,
+    /// never a silent coercion to a valid-looking schedule (spec §4.1). Anything
+    /// downstream must reject this case *before* trusting `nextDueAt`.
+    case needsRepair(rawPayload: Data)
 
     /// Validated factory for an interval schedule. Returns `nil` when hours+minutes
     /// falls outside `[5 min, 24 h]` — invalid intervals are unrepresentable (spec §4.1).
     public static func every(hours: Int = 0, minutes: Int = 0) -> ScheduleType? {
         IntervalMinutes(minutes: hours * 60 + minutes).map(ScheduleType.interval)
+    }
+
+    /// True iff this is the undecodable `.needsRepair` state.
+    public var isNeedsRepair: Bool {
+        if case .needsRepair = self { return true }
+        return false
+    }
+
+    /// Load a persisted schedule, **quarantining decode failure per-task**.
+    ///
+    /// This is the ONLY sanctioned way to turn stored bytes back into a
+    /// `ScheduleType`. On any failure — corrupt JSON, unknown case, or an
+    /// out-of-range interval that fails `IntervalMinutes` validation — it returns
+    /// `.needsRepair(rawPayload:)` carrying the original bytes. It never throws and
+    /// never coerces to `.prn` or a default interval, so one bad task can neither
+    /// crash store loading nor silently stop firing reminders (spec §4.1).
+    public static func decode(fromStore data: Data) -> ScheduleType {
+        do {
+            return try JSONDecoder().decode(ScheduleType.self, from: data)
+        } catch {
+            return .needsRepair(rawPayload: data)
+        }
     }
 }
 

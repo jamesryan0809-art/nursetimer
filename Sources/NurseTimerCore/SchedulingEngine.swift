@@ -42,6 +42,9 @@ public enum SchedulingEngine {
             return nil
         case .prn:
             return nil
+        case .needsRepair:
+            // A broken schedule produces no next-due. It must be repaired first.
+            return nil
         }
     }
 
@@ -49,6 +52,28 @@ public enum SchedulingEngine {
     public static func shouldAutoPauseAfterCompletion(_ schedule: ScheduleType) -> Bool {
         if case .once = schedule { return true }
         return false
+    }
+
+    /// The **initial** `nextDueAt` for a freshly-set or just-repaired schedule,
+    /// anchored at `anchor` (the nurse's last-given time, or now).
+    ///
+    /// Unlike `nextDueAfterCompletion`, `.once` yields its own fire date here (this
+    /// is the *first* due, not the one after a completion). `.needsRepair` and
+    /// `.prn` yield nil. Repair uses this to establish a fresh due time — the old,
+    /// untrusted `nextDueAt` is never reused (spec §4.1 / §6.2).
+    public static func firstDue(for schedule: ScheduleType, anchor: Date, calendar: Calendar) -> Date? {
+        switch schedule {
+        case .interval(let interval):
+            return anchor.addingTimeInterval(interval.timeInterval)
+        case .fixedTimes(let times):
+            return nextFixedTime(after: anchor, times: times, calendar: calendar)
+        case .once(let date):
+            return date
+        case .prn:
+            return nil
+        case .needsRepair:
+            return nil
+        }
     }
 
     // MARK: Fixed-time resolution (spec §4.1 / §8 midnight crossing)

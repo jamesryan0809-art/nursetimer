@@ -88,6 +88,18 @@ the UI can't diverge from Core):
   backstop, not the primary gate — the picker should never be able to submit a value
   Core would reject.
 
+- **Schedule-repair UI (spec §6.2/§6.3):** a task whose schedule failed to decode is
+  reported in `NotificationPlan.tasksNeedingRepair`. The app must:
+  1. Pin it to the top of the Board with an unmissable error treatment.
+  2. On detection, fire a local notification ("A task's schedule couldn't be loaded —
+     tap to fix") using `NotificationPlanner.repairWarningIdentifier(taskID:)` (a
+     deterministic per-task id) so re-detection **replaces** rather than duplicates the
+     warning; remove that pending warning once the task leaves `tasksNeedingRepair`.
+  3. Exclude the task from the Schedule tab's projections.
+  4. On tap, open the Edit form with the **schedule field empty and required**, all
+     other task data preserved. Saving calls `CareTask.repair(with:anchor:)`, which sets
+     a fresh `nextDueAt` (the old, untrusted one is never reused).
+
 ## Spec ambiguities resolved (see report / code comments)
 
 1. **SwiftPM layout instead of the spec's `Shared/` Xcode folder** — chosen so tests

@@ -2,7 +2,7 @@
 
 A local-only, privacy-first task and medication reminder app for nurses. iPhone + Apple Watch. Think "smart alarm clock organized by patient," not a clinical system.
 
-> **Change log (Core-only, Milestone 1).** Sections amended after v1.0 are marked with the change tag that introduced them, e.g. **[interval-validation]**.
+> **Change log (Core-only, Milestone 1).** Sections amended after v1.0 are marked with the change tag that introduced them, e.g. **[interval-validation]**, **[fail-loud-decode]**.
 
 ---
 
@@ -54,6 +54,7 @@ Fields: id, kind (`.medication`/`.generic`), title, dosage (String?, med only), 
 - `.fixedTimes([DateComponents])` — set wall-clock times (0900/2100).
 - `.once(Date)` — one-shot; auto-pauses after completion.
 - `.prn` — as-needed; never auto-schedules.
+- **`.needsRepair(rawPayload: Data)` [fail-loud-decode]** — a schedule that could not be decoded from the store, carrying the raw undecodable bytes for diagnostics. A task in this state schedules **no** reminders and is surfaced for manual repair (§4.1, §6.2/§6.3). This case exists so decode failure is *explicit*, never a silent coercion to PRN.
 
 Built-in generic task quick-picks (prefill title only): Turn/reposition, Vitals, I&O, Blood glucose, Ambulate, Custom.
 
@@ -72,6 +73,7 @@ defaultLeadTimeMinutes = 15, defaultSnoozeMinutes = 3, privacyModeNotifications 
 - `.fixedTimes`: next occurrence of any listed time after now, correctly crossing midnight.
 - `.once`: fires once; after completion, task auto-pauses.
 - `.prn`: no automatic scheduling.
+- **`.needsRepair` [fail-loud-decode]: produces no next-due and no reminders.** It is rejected **before** `nextDueAt` is examined; any pre-existing `nextDueAt` is untrusted and must not produce notifications or projections. **Schedule decoding never silently falls back to a valid-looking schedule** — an undecodable payload (corrupt JSON, unknown case, or an out-of-range interval that fails validation) becomes `.needsRepair` carrying the raw bytes, quarantined per-task so one bad task never blocks loading the rest of the store, and reported to the app via `tasksNeedingRepair: [TaskID]` (§4.3).
 
 ### 4.2 Reminder timeline per due time
 For a task due at D with lead L and snooze interval S:
@@ -98,19 +100,22 @@ The 64-pending-notification OS cap is the binding constraint. Only the next 12 h
 ### 6.1 Navigation
 Bottom tab bar: **Board**, **Schedule**, **Log**. Settings via gear; Shift Review from the Board.
 
-### 6.2 Screens (Add/Edit Task form) **[interval-validation]**
-- **Board tab:** patients as cards sorted by soonest due; global "Up Next" strip; overdue pinned red at top.
-- **Schedule tab:** day timeline of scheduled + projected occurrences, cluster highlighting, By-Time/By-Patient toggle.
+### 6.2 Screens (Add/Edit Task form) **[interval-validation] [fail-loud-decode]**
+- **Board tab:** patients as cards sorted by soonest due; global "Up Next" strip; overdue pinned red at top. **Tasks needing repair (`.needsRepair`) are pinned above everything with an unmissable error treatment [fail-loud-decode]** (see §6.3).
+- **Schedule tab:** day timeline of scheduled + projected occurrences, cluster highlighting, By-Time/By-Patient toggle. **`.needsRepair` tasks are excluded from projections [fail-loud-decode]** — they have no trustworthy schedule.
 - **Patient detail / task list.**
 - **Add/Edit Task form:**
   - kind toggle; title (free text); dosage/route (med only).
   - **Schedule picker [interval-validation]:** *Every N hours + minutes* is an **hours+minutes wheel/stepper bounded to [5 minutes, 24 hours]**, so out-of-range/nonsense intervals are **unenterable** — Core's `IntervalMinutes` validation is the backstop, not the primary gate. Other modes: At set times / Once / PRN.
   - last-given time (optional; if set for interval meds, computes `nextDueAt` immediately).
   - per-task lead & snooze overrides under "Advanced".
+  - **Repair flow [fail-loud-decode]:** when opened for a `.needsRepair` task, the schedule field is **empty and required**; **all other task data is preserved**. Saving a repaired schedule clears the repair state and establishes a **new** valid `nextDueAt` from the selected schedule + anchor time — the old (untrusted) `nextDueAt` is **not** reused.
 - **Shift Review**, **Log tab**, **Settings** — as v1.0.
 
-### 6.3 Privacy & security
+### 6.3 Privacy & security + repair surfacing **[fail-loud-decode]**
 App lock (Face ID / passcode), notification redaction in privacy mode, local-only data — as v1.0.
+
+- **Schedule-repair surfacing [fail-loud-decode]:** on detecting a `.needsRepair` task, the app fires a local notification ("A task's schedule couldn't be loaded — tap to fix") using a **deterministic per-task identifier** (`NotificationPlanner.repairWarningIdentifier(taskID:)`) so re-detection **replaces** the existing warning rather than duplicating it. Once the task is repaired it drops out of `tasksNeedingRepair` and its pending warning is removed. Tapping the warning (or the pinned Board row) opens the Edit form per §6.2's repair flow.
 
 ### 6.4 Shift Review flow / 6.5 Overdue & missed handling — as v1.0.
 
