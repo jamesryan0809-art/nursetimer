@@ -82,6 +82,7 @@ final class NurseStore {
         task.nextDueAt = SchedulingEngine.nextDueAfterCompletion(schedule: schedule, completedAt: date, calendar: calendar)
         if SchedulingEngine.shouldAutoPauseAfterCompletion(schedule) { task.isPaused = true }
         task.explicitSnoozeAt = nil
+        task.updatedAt = date
         commit()
     }
 
@@ -91,6 +92,7 @@ final class NurseStore {
         guard !task.scheduleType.isNeedsRepair else { return }
         record(.snoozed, on: task, at: date)
         task.explicitSnoozeAt = date
+        task.updatedAt = date
         commit()
     }
 
@@ -104,6 +106,7 @@ final class NurseStore {
         task.nextDueAt = SchedulingEngine.nextDueAfterCompletion(schedule: schedule, completedAt: date, calendar: calendar)
         if SchedulingEngine.shouldAutoPauseAfterCompletion(schedule) { task.isPaused = true }
         task.explicitSnoozeAt = nil
+        task.updatedAt = date
         commit()
     }
 

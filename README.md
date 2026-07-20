@@ -187,6 +187,10 @@ Xcode 16+ must complete each item.
 - ⬜ Repair warning routing on device: individual tap → repair form; digest tap → Board
   repair section; obsolete delivered warnings removed on repair; no re-buzz on stable replans.
 
+### App-layer audit fixes (items 6–12 — blind-authored, uncompiled)
+- ⬜ **Item 6:** `CareTask.createdAt/updatedAt` added (was assigned but undeclared → compile
+  error). Confirm the app compiles and the store migrates (new attributes have defaults).
+
 ### Cross-cutting
 - ⬜ Dynamic Type scales legibly (rows readable at arm's length).
 - ⬜ Light and dark appearance both correct (status colors only).

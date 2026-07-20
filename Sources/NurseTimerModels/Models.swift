@@ -72,6 +72,11 @@ public final class CareTask {
     public var snoozeMinutes: Int?
     public var isPaused: Bool
     public var explicitSnoozeAt: Date?
+    // Timestamps consistent with Patient. Property-level defaults let SwiftData add these
+    // new attributes to an existing store via lightweight migration (item 6 — repair/
+    // pause/resume assign updatedAt).
+    public var createdAt: Date = Date()
+    public var updatedAt: Date = Date()
 
     public var patient: Patient?
 
@@ -91,6 +96,8 @@ public final class CareTask {
         snoozeMinutes: Int? = nil,
         isPaused: Bool = false,
         explicitSnoozeAt: Date? = nil,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date(),
         history: [TaskEvent] = []
     ) {
         self.id = id
@@ -105,6 +112,8 @@ public final class CareTask {
         self.snoozeMinutes = snoozeMinutes
         self.isPaused = isPaused
         self.explicitSnoozeAt = explicitSnoozeAt
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
         self.history = history
     }
 }
