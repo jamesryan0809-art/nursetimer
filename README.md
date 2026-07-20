@@ -174,6 +174,19 @@ Xcode 16+ must complete each item.
   WatchConnectivity + shared state exist (a later milestone).
 - ⬜ Watch UI is built on `NurseTimerCore` + `SyncTransport` only — no phone persistence coupling.
 
+### Notification budget & taper (Core items 1–4 — verified in `swift test`; tune on Mac)
+- ✅ Cap ≤ 60 and full task representation at any load (61+ overdue; mixed; global escape
+  valve across rooms AND windows; combined saturation) — planner postcondition, tested.
+- ✅ Tapered post-due chain (Phase 1 @S / Phase 2 @15m / Phase 3 @30m), pre-scheduled for
+  future occurrences; 5-ping floor then whole-chain digest replacement; repair warnings
+  planner-owned + digested; `planWasReduced` + counts.
+- ⬜ **Tune on Mac:** pre-scheduled tapers raise baseline notification demand, so grouping
+  can activate at realistic loads (~15–20 tasks per horizon). Evaluate the "reminders were
+  reduced" banner on device so it stays informative rather than noisy — consider surfacing
+  it only on coalescing (not every trim) if it fires too often.
+- ⬜ Repair warning routing on device: individual tap → repair form; digest tap → Board
+  repair section; obsolete delivered warnings removed on repair; no re-buzz on stable replans.
+
 ### Cross-cutting
 - ⬜ Dynamic Type scales legibly (rows readable at arm's length).
 - ⬜ Light and dark appearance both correct (status colors only).

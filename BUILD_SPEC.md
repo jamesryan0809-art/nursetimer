@@ -77,25 +77,33 @@ defaultLeadTimeMinutes = 15, defaultSnoozeMinutes = 3, privacyModeNotifications 
 - `.prn`: no automatic scheduling.
 - **`.needsRepair` [fail-loud-decode]: produces no next-due and no reminders.** It is rejected **before** `nextDueAt` is examined; any pre-existing `nextDueAt` is untrusted and must not produce notifications or projections. **Schedule decoding never silently falls back to a valid-looking schedule** — an undecodable payload (corrupt JSON, unknown case, or an out-of-range interval that fails validation) becomes `.needsRepair` carrying the raw bytes, quarantined per-task so one bad task never blocks loading the rest of the store, and reported to the app via `tasksNeedingRepair: [TaskID]` (§4.3).
 
-### 4.2 Reminder timeline per due time
-For a task due at D with lead L and snooze interval S:
+### 4.2 Reminder timeline per due time **[taper]**
+For a task due at `D` with lead `L` and snooze interval `S`, the **post-due tapered chain**
+is a pure function of `(anchor, S, now, horizon)` with no stored phase state:
 1. Pre-alert at `D − L`.
 2. Due alert at `D`.
-3. If not acted on: re-ping every S minutes — a chain of 20 pre-computed snooze notifications (D+S … D+20S), the whole chain cancelled by acting on the task, extended on foreground/action when fewer than 5 remain.
-4. Explicit Snooze: cancels current chain, schedules a new chain starting at `now + S`.
+3. **Tapered re-pings (item 3):**
+   - **Phase 1** — `fastCount` (5) pings at `S`: `D+S … D+5S`.
+   - **Phase 2** — `midCount` (5) pings at `midIntervalMinutes` (15).
+   - **Phase 3** — `slowIntervalMinutes` (30) spacing to the horizon (the "indefinite" slow phase).
+   Indices are 1-based from the anchor (stable across re-plans). Acting on the task cancels the whole chain (re-plan drops it).
+4. **Explicit Snooze** re-anchors the **entire taper at Phase 1 from the tap time** (`tap+S, tap+2S, …`).
+5. **Pre-scheduling (item 3):** every upcoming occurrence in the 12h horizon is planned *now* WITH its post-due taper, so the app never needs to foreground after the due alert for re-pings to begin. Budget reduction may subsequently shorten (tail-first) or digest-replace that chain.
 
-### 4.3 Notification budget management **[hard-cap-grouping]**
-The OS caps pending local notifications at 64. NurseTimer enforces a **strict, hard invariant: the emitted plan NEVER exceeds 60 notifications** (headroom below 64), and **no task's due time ever goes completely unrepresented**.
+### 4.3 Notification budget management **[hard-cap-grouping] [representation] [taper] [repair-warnings]**
+The OS caps pending local notifications at 64. NurseTimer enforces a **hard invariant: the emitted plan NEVER exceeds `maxPlanNotifications` (60)**, and — as a **tested planner postcondition** — while any task is due or overdue the plan is **non-empty** and represents **every** such task by at least one notification (individually or as a digest member). The reduce-to-zero backstop was **removed**. Invalid settings are clamped to safe defaults at plan entry and reported via `settingsAdjusted` (never crash, never empty).
 
-Only the next 12 hours of due times are scheduled. The planner recomputes the full pending set on every data change / foreground (cancel-all then reschedule). Deterministic identifiers: `"{taskID}|{dueISO8601}|{slot}"` (slot ∈ `pre`, `due`, `snooze-N`); digest groups use `"group|{room}|{windowStartISO8601}"` (same-room) or `"group|*|{windowStartISO8601}"` (cross-room).
+Only the next 12 hours are scheduled; the planner recomputes the whole set on every change / foreground (cancel-all then reschedule). Identifiers: individual `"{taskID}|{dueISO}|{slot}"`; due digests `group|{room}|{windowISO}` / `group|*|{windowISO}` / `group|*|global`; overdue digests `overdue|{room|*}|{windowISO}` / `overdue|*|global`; repair warning `repair|{taskID}`; repair digest `repairs|{count}`. Member task IDs are carried at every tier.
 
-**Reduction order when a plan would exceed 60 (each step applied only as far as needed):**
-- **a. Trim pre-alerts**, furthest-out first.
-- **b. Trim snooze-chain depth uniformly** (20 → as low as 5 pings per chain; never below 5 under normal load).
-- **c. Coalesce due alerts into grouped digests** — key is *same room, due within the same fixed 30-minute window*. One notification titled e.g. `"4 tasks due · Rm 422 · next 30 min"`, carrying the member task IDs so a tap routes to the room-filtered Board. Individual due alerts are always preferred; grouping is the escape valve, applied furthest-window-first.
-- **d. Coalesce across rooms by 30-minute window** — e.g. `"6 tasks due · 3 rooms · by 14:30"`. A 12-hour horizon spans at most 24 windows, so cross-room grouping guarantees the due representation fits under 60.
+**Repair warnings are OWNED by the planner (item 2):** planned **FIRST** against the cap; task notifications fit the remainder. Exempt from trimming but coalesced into ONE repair digest (`"N tasks need schedule repair — tap to fix"`) above `repairDigestThreshold` (5) or when they'd starve the tasks. Immediate trigger. Routing: an individual warning tap → that task's repair form; a repair digest tap → the Board's repair section. The scheduler removes obsolete delivered repair notifications when membership changes (repaired / newly broken) and doesn't re-buzz stable ones.
 
-A `.needsRepair` task contributes zero notifications and is reported separately (§4.1). The plan carries UI flags: `planWasCoalesced: Bool` + `coalescedGroupCount`, `wasTrimmed: Bool`, and `tasksNeedingRepair: [TaskID]` — driving the spec's "many tasks scheduled" banner.
+**Reduction order — joint, cross-category allocation (each step only as far as needed; individual alerts preferred while budget allows):**
+- **a. Trim pre-alerts**, furthest-due first.
+- **b. Shorten chains uniformly from the tail** (slow phase first) down to the **five-ping floor**.
+- **c. Coalesce upcoming tasks** — escalating *same room+window* → *cross-room per window* → **global** (`"N tasks due — open app"`).
+- **d. Coalesce overdue tasks** — same ladder: `"3 overdue · Rm 422"` → `"6 overdue · 3 rooms"` → **global** `"N tasks overdue — open app"`. **Each ungrouped overdue task keeps ≥5 pings; when that can't fit, its whole chain is replaced by digest membership carrying its task ID.**
+
+The global tier guarantees representation (worst case: one digest per category ≤ cap). Plan flags: `planWasReduced: Bool` + `ReductionSummary { preAlertsTrimmed, chainDepthReduced, digestsFormed }` (item 4), plus `planWasCoalesced`/`coalescedGroupCount`, `wasTrimmed`, `settingsAdjusted`, and `tasksNeedingRepair: [TaskID]`.
 
 ### 4.4 Interruption level
 `.timeSensitive`. No Critical Alerts in v1 (v2 candidate).
