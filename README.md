@@ -165,6 +165,14 @@ Xcode 16+ must complete each item.
   WatchConnectivity + shared state exist (a later milestone).
 - ⬜ Watch UI is built on `NurseTimerCore` + `SyncTransport` only — no phone persistence coupling.
 
+### Cross-cutting
+- ⬜ Dynamic Type scales legibly (rows readable at arm's length).
+- ⬜ Light and dark appearance both correct (status colors only).
+- ⬜ iPhone simulator/device run; Watch simulator/device run.
+- ⬜ Complication/widget timelines render across accessory families.
+- ⬜ Signing, entitlements (Time Sensitive), bundle-id nesting, and companion-app config valid.
+- ⬜ No network traffic generated anywhere (spec §10 / §1.2) — verify with a proxy/Network report.
+
 ### Behavior Core enforces that the UI must honor
 - **Interval schedule picker (BUILD_SPEC §6.2):** the "Every N" mode must be an
   hours+minutes picker bounded to **[5 minutes, 24 hours]** so invalid intervals are
