@@ -153,6 +153,18 @@ Xcode 16+ must complete each item.
 - ⬜ Reminder-affecting settings changes trigger a replan; app-lock changes reconfigure the lock.
 - ⬜ First-launch disclaimer (§1.2 exact wording) shown once and re-viewable in Settings.
 
+### Watch app + widget — Milestone 4 (authored, uncompiled, sync stubbed)
+- ⬜ Watch app builds and runs against `SyncTransport` (stub); **no** `WCSession`,
+  no networking, no `WCSessionDelegate` / message / app-context / file transfer.
+- ⬜ Now view: tasks sorted OVERDUE → DUE≤15m → upcoming; room/title/dosage/due; Crown
+  scroll; accessibility labels; empty state; permanent "not synced · sample data" banner.
+- ⬜ Task detail: Snooze (dominant/first), Given/Done, Skip (2nd-tap confirm + quick reason).
+- ⬜ Custom notification interface renders content; actions come from the shared category.
+- ⬜ Widget/complication: accessory families; **honest not-synced state** (no fabricated
+  data); sample-data previews. Live complication data can't be validated until
+  WatchConnectivity + shared state exist (a later milestone).
+- ⬜ Watch UI is built on `NurseTimerCore` + `SyncTransport` only — no phone persistence coupling.
+
 ### Behavior Core enforces that the UI must honor
 - **Interval schedule picker (BUILD_SPEC §6.2):** the "Every N" mode must be an
   hours+minutes picker bounded to **[5 minutes, 24 hours]** so invalid intervals are
