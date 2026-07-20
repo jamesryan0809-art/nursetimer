@@ -77,6 +77,17 @@ without a Swift toolchain (e.g. plain Windows).
 Open `Package.swift` in Xcode and run the test target, or `swift test` from the CLI.
 Everything is Foundation-only, so no Apple-specific setup is required for the tests.
 
+## Verify on Mac — required UI behavior (Core is built; UI is a later milestone)
+
+Behavior Core enforces that the iOS/watchOS UI must honor (do not build now; noted so
+the UI can't diverge from Core):
+
+- **Interval schedule picker (Add/Edit form, spec §6.2):** the "Every N" schedule
+  mode must be an **hours+minutes wheel/stepper bounded to [5 minutes, 24 hours]**, so
+  invalid intervals are *unenterable*. Core's `IntervalMinutes` failable init is the
+  backstop, not the primary gate — the picker should never be able to submit a value
+  Core would reject.
+
 ## Spec ambiguities resolved (see report / code comments)
 
 1. **SwiftPM layout instead of the spec's `Shared/` Xcode folder** — chosen so tests

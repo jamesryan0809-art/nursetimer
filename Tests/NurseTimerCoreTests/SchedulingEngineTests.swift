@@ -9,7 +9,7 @@ final class SchedulingEngineTests: XCTestCase {
         let cal = utcCalendar()
         let given = dt(cal, 2026, 7, 19, 13, 7)
         let next = SchedulingEngine.nextDueAfterCompletion(
-            schedule: .interval(hours: 4), completedAt: given, calendar: cal)
+            schedule: everyHr(4), completedAt: given, calendar: cal)
         XCTAssertEqual(next, dt(cal, 2026, 7, 19, 17, 7))
     }
 
@@ -18,7 +18,7 @@ final class SchedulingEngineTests: XCTestCase {
         let cal = utcCalendar()
         let givenLate = dt(cal, 2026, 7, 19, 17, 45)
         let next = SchedulingEngine.nextDueAfterCompletion(
-            schedule: .interval(hours: 4), completedAt: givenLate, calendar: cal)
+            schedule: everyHr(4), completedAt: givenLate, calendar: cal)
         XCTAssertEqual(next, dt(cal, 2026, 7, 19, 21, 45))
     }
 
@@ -26,7 +26,7 @@ final class SchedulingEngineTests: XCTestCase {
         let cal = utcCalendar()
         let given = dt(cal, 2026, 7, 19, 8, 0)
         let next = SchedulingEngine.nextDueAfterCompletion(
-            schedule: .interval(hours: 6), completedAt: given, calendar: cal)
+            schedule: everyHr(6), completedAt: given, calendar: cal)
         XCTAssertEqual(next, dt(cal, 2026, 7, 19, 14, 0))
     }
 
@@ -73,7 +73,7 @@ final class SchedulingEngineTests: XCTestCase {
     }
 
     func test_interval_andPRN_doNotAutoPause() {
-        XCTAssertFalse(SchedulingEngine.shouldAutoPauseAfterCompletion(.interval(hours: 4)))
+        XCTAssertFalse(SchedulingEngine.shouldAutoPauseAfterCompletion(everyHr(4)))
         XCTAssertFalse(SchedulingEngine.shouldAutoPauseAfterCompletion(.prn))
     }
 
@@ -168,7 +168,7 @@ final class SchedulingEngineTests: XCTestCase {
         let cal = nyCalendar()
         let given = dt(cal, 2026, 3, 8, 1, 30)
         let next = SchedulingEngine.nextDueAfterCompletion(
-            schedule: .interval(hours: 4), completedAt: given, calendar: cal)!
+            schedule: everyHr(4), completedAt: given, calendar: cal)!
         XCTAssertEqual(next.timeIntervalSince(given), 4 * 3600, accuracy: 0.5)
         let comps = at(cal, next)
         XCTAssertEqual(comps.hour, 6)

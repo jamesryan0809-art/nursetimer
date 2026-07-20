@@ -32,3 +32,7 @@ func at(_ cal: Calendar, _ date: Date) -> DateComponents {
 func time(_ h: Int, _ m: Int) -> DateComponents {
     DateComponents(hour: h, minute: m)
 }
+
+/// Build a valid interval schedule for tests. Force-unwraps — callers pass legal values.
+func everyHr(_ h: Int) -> ScheduleType { .interval(IntervalMinutes(hours: h)!) }
+func everyMin(_ m: Int) -> ScheduleType { .interval(IntervalMinutes(minutes: m)!) }

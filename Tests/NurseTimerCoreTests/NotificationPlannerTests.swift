@@ -40,7 +40,7 @@ final class NotificationPlannerTests: XCTestCase {
         let cal = utcCalendar()
         let now = dt(cal, 2026, 7, 19, 16, 0)
         let due = dt(cal, 2026, 7, 19, 16, 30)   // 30 min out, lead 15 → pre in future
-        let task = TaskSnapshot(id: taskID1, scheduleType: .interval(hours: 4), nextDueAt: due)
+        let task = TaskSnapshot(id: taskID1, scheduleType: everyHr(4), nextDueAt: due)
 
         let plan = NotificationPlanner.plan(
             tasks: [task], settings: .default, now: now, calendar: cal)
@@ -56,7 +56,7 @@ final class NotificationPlannerTests: XCTestCase {
         let cal = utcCalendar()
         let now = dt(cal, 2026, 7, 19, 16, 0)
         let due = dt(cal, 2026, 7, 19, 16, 5)    // 5 min out, lead 15 → pre already past
-        let task = TaskSnapshot(id: taskID1, scheduleType: .interval(hours: 4), nextDueAt: due)
+        let task = TaskSnapshot(id: taskID1, scheduleType: everyHr(4), nextDueAt: due)
 
         let plan = NotificationPlanner.plan(tasks: [task], settings: .default, now: now, calendar: cal)
         XCTAssertEqual(slots(plan), [.due])
@@ -68,7 +68,7 @@ final class NotificationPlannerTests: XCTestCase {
         let cal = utcCalendar()
         let now = dt(cal, 2026, 7, 19, 8, 0)
         let due = now.addingTimeInterval(13 * 3600)   // beyond horizon
-        let task = TaskSnapshot(id: taskID1, scheduleType: .interval(hours: 4), nextDueAt: due)
+        let task = TaskSnapshot(id: taskID1, scheduleType: everyHr(4), nextDueAt: due)
         let plan = NotificationPlanner.plan(tasks: [task], settings: .default, now: now, calendar: cal)
         XCTAssertTrue(plan.notifications.isEmpty)
     }
@@ -77,7 +77,7 @@ final class NotificationPlannerTests: XCTestCase {
         let cal = utcCalendar()
         let now = dt(cal, 2026, 7, 19, 8, 0)
         let due = now.addingTimeInterval(11 * 3600)
-        let task = TaskSnapshot(id: taskID1, scheduleType: .interval(hours: 4), nextDueAt: due)
+        let task = TaskSnapshot(id: taskID1, scheduleType: everyHr(4), nextDueAt: due)
         let plan = NotificationPlanner.plan(tasks: [task], settings: .default, now: now, calendar: cal)
         XCTAssertEqual(slots(plan), [.pre, .due])
     }
@@ -88,7 +88,7 @@ final class NotificationPlannerTests: XCTestCase {
         let cal = utcCalendar()
         let due = dt(cal, 2026, 7, 19, 16, 0)
         let now = due.addingTimeInterval(60)     // 1 min overdue
-        let task = TaskSnapshot(id: taskID1, scheduleType: .interval(hours: 4), nextDueAt: due)
+        let task = TaskSnapshot(id: taskID1, scheduleType: everyHr(4), nextDueAt: due)
 
         let plan = NotificationPlanner.plan(tasks: [task], settings: .default, now: now, calendar: cal)
         XCTAssertEqual(plan.notifications.count, 20)               // full chain, within horizon
@@ -105,8 +105,8 @@ final class NotificationPlannerTests: XCTestCase {
         let overdueDue = dt(cal, 2026, 7, 19, 16, 0)
         let now = overdueDue.addingTimeInterval(120)
         let newDue = SchedulingEngine.nextDueAfterCompletion(
-            schedule: .interval(hours: 4), completedAt: now, calendar: cal)!
-        let task = TaskSnapshot(id: taskID1, scheduleType: .interval(hours: 4),
+            schedule: everyHr(4), completedAt: now, calendar: cal)!
+        let task = TaskSnapshot(id: taskID1, scheduleType: everyHr(4),
                                 lastCompletedAt: now, nextDueAt: newDue)
 
         let plan = NotificationPlanner.plan(tasks: [task], settings: .default, now: now, calendar: cal)
@@ -120,7 +120,7 @@ final class NotificationPlannerTests: XCTestCase {
         let due = dt(cal, 2026, 7, 19, 16, 0)
         let now = due.addingTimeInterval(5 * 60)          // 5 min overdue
         let tapped = now                                   // nurse taps Snooze now
-        let task = TaskSnapshot(id: taskID1, scheduleType: .interval(hours: 4),
+        let task = TaskSnapshot(id: taskID1, scheduleType: everyHr(4),
                                 nextDueAt: due, explicitSnoozeAt: tapped)
 
         let plan = NotificationPlanner.plan(tasks: [task], settings: .default, now: now, calendar: cal)
@@ -133,7 +133,7 @@ final class NotificationPlannerTests: XCTestCase {
     func test_pausedTask_andPRN_produceNoNotifications() {
         let cal = utcCalendar()
         let now = dt(cal, 2026, 7, 19, 16, 0)
-        let paused = TaskSnapshot(id: taskID1, scheduleType: .interval(hours: 4),
+        let paused = TaskSnapshot(id: taskID1, scheduleType: everyHr(4),
                                   nextDueAt: now.addingTimeInterval(1800), isPaused: true)
         let prn = TaskSnapshot(scheduleType: .prn, nextDueAt: nil)
         let plan = NotificationPlanner.plan(tasks: [paused, prn], settings: .default, now: now, calendar: cal)
@@ -151,7 +151,7 @@ final class NotificationPlannerTests: XCTestCase {
         for i in 0..<30 {
             let due = now.addingTimeInterval(Double((i + 1) * 10) * 60)
             tasks.append(TaskSnapshot(
-                id: UUID(), scheduleType: .interval(hours: 4), nextDueAt: due, leadTimeMinutes: 5))
+                id: UUID(), scheduleType: everyHr(4), nextDueAt: due, leadTimeMinutes: 5))
         }
 
         let plan = NotificationPlanner.plan(tasks: tasks, settings: .default, now: now, calendar: cal)
@@ -174,7 +174,7 @@ final class NotificationPlannerTests: XCTestCase {
         let cal = utcCalendar()
         let now = dt(cal, 2026, 7, 19, 8, 0)
         let tasks = (0..<10).map { i in
-            TaskSnapshot(id: UUID(), scheduleType: .interval(hours: 4),
+            TaskSnapshot(id: UUID(), scheduleType: everyHr(4),
                          nextDueAt: now.addingTimeInterval(Double((i + 1) * 10) * 60),
                          leadTimeMinutes: 5)
         }
@@ -189,7 +189,7 @@ final class NotificationPlannerTests: XCTestCase {
         let cal = utcCalendar()
         let now = dt(cal, 2026, 7, 19, 8, 0)
         let tasks = (0..<5).map { i in
-            TaskSnapshot(id: UUID(), scheduleType: .interval(hours: 4),
+            TaskSnapshot(id: UUID(), scheduleType: everyHr(4),
                          nextDueAt: now.addingTimeInterval(Double((5 - i) * 20) * 60))
         }
         let plan = NotificationPlanner.plan(tasks: tasks, settings: .default, now: now, calendar: cal)

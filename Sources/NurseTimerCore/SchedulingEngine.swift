@@ -34,8 +34,8 @@ public enum SchedulingEngine {
         calendar: Calendar
     ) -> Date? {
         switch schedule {
-        case .interval(let hours):
-            return completedAt.addingTimeInterval(hours * 3600)
+        case .interval(let interval):
+            return completedAt.addingTimeInterval(interval.timeInterval)
         case .fixedTimes(let times):
             return nextFixedTime(after: completedAt, times: times, calendar: calendar)
         case .once:
