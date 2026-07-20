@@ -100,6 +100,23 @@ public struct PlannedNotification: Equatable, Sendable {
     }
 }
 
+/// How much the budget had to reduce the ideal plan (item 4).
+public struct ReductionSummary: Equatable, Sendable {
+    public let preAlertsTrimmed: Int
+    /// How many pings the uniform chain depth was shortened by (tail-first).
+    public let chainDepthReduced: Int
+    /// Digests formed across all tiers/categories (task + repair).
+    public let digestsFormed: Int
+
+    public init(preAlertsTrimmed: Int = 0, chainDepthReduced: Int = 0, digestsFormed: Int = 0) {
+        self.preAlertsTrimmed = preAlertsTrimmed
+        self.chainDepthReduced = chainDepthReduced
+        self.digestsFormed = digestsFormed
+    }
+    /// Any reduction of any kind occurred.
+    public var any: Bool { preAlertsTrimmed > 0 || chainDepthReduced > 0 || digestsFormed > 0 }
+}
+
 /// The full pending set for a shift horizon plus flags for the UI banners (spec §4.3).
 public struct NotificationPlan: Equatable, Sendable {
     public let notifications: [PlannedNotification]
@@ -109,6 +126,11 @@ public struct NotificationPlan: Equatable, Sendable {
     public let planWasCoalesced: Bool
     /// Number of group digests in the plan.
     public let coalescedGroupCount: Int
+    /// **True on ANY reduction** — pre-alert trim, chain shortening, or coalescing at any
+    /// tier/category (item 4). Drives the §4.3 "reminders were reduced" banner.
+    public let planWasReduced: Bool
+    /// Per-kind reduction counts (item 4).
+    public let reduction: ReductionSummary
     /// IDs of tasks whose schedule failed to decode (`.needsRepair`), surfaced for repair.
     public let tasksNeedingRepair: [UUID]
     /// Settings were out of range and safe defaults were substituted (item 1).
@@ -119,6 +141,8 @@ public struct NotificationPlan: Equatable, Sendable {
         wasTrimmed: Bool,
         planWasCoalesced: Bool,
         coalescedGroupCount: Int,
+        planWasReduced: Bool = false,
+        reduction: ReductionSummary = ReductionSummary(),
         tasksNeedingRepair: [UUID] = [],
         settingsAdjusted: Bool = false
     ) {
@@ -126,6 +150,8 @@ public struct NotificationPlan: Equatable, Sendable {
         self.wasTrimmed = wasTrimmed
         self.planWasCoalesced = planWasCoalesced
         self.coalescedGroupCount = coalescedGroupCount
+        self.planWasReduced = planWasReduced
+        self.reduction = reduction
         self.tasksNeedingRepair = tasksNeedingRepair
         self.settingsAdjusted = settingsAdjusted
     }
@@ -232,6 +258,10 @@ public enum NotificationPlanner {
 
         let all = repair.notifications + result.notifications
         let groupCount = result.groupCount + (repair.isDigest ? 1 : 0)
+        let reduction = ReductionSummary(
+            preAlertsTrimmed: result.preTrimmed,
+            chainDepthReduced: result.depthReduced,
+            digestsFormed: groupCount)
         return NotificationPlan(
             notifications: all.sorted { lhs, rhs in
                 lhs.fireDate != rhs.fireDate ? lhs.fireDate < rhs.fireDate : lhs.identifier < rhs.identifier
@@ -239,6 +269,8 @@ public enum NotificationPlanner {
             wasTrimmed: result.wasTrimmed,
             planWasCoalesced: groupCount > 0,
             coalescedGroupCount: groupCount,
+            planWasReduced: reduction.any,
+            reduction: reduction,
             tasksNeedingRepair: tasksNeedingRepair,
             settingsAdjusted: settingsAdjusted)
     }
@@ -293,12 +325,15 @@ public enum NotificationPlanner {
 
     private static func enforceBudget(
         entries: [TaskEntry], settings: SchedulerSettings, cap: Int, calendar: Calendar
-    ) -> (notifications: [PlannedNotification], wasTrimmed: Bool, groupCount: Int) {
+    ) -> (notifications: [PlannedNotification], wasTrimmed: Bool, groupCount: Int,
+          preTrimmed: Int, depthReduced: Int) {
         let floor = settings.minSnoozeDepth
         let byID = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
 
         var preKept = Set(entries.compactMap { $0.pre != nil ? $0.id : nil })
-        var depth = entries.map { $0.chain.count }.max() ?? 0
+        let initialDepth = entries.map { $0.chain.count }.max() ?? 0
+        var depth = initialDepth
+        var preTrimmed = 0
         var upcoming = entries.filter { $0.category == .upcoming }.map { Unit(ids: [$0.id], window: $0.windowStart) }
         var overdue = entries.filter { $0.category == .overdue }.map { Unit(ids: [$0.id], window: $0.windowStart) }
 
@@ -323,7 +358,7 @@ public enum NotificationPlanner {
         if total() > cap {
             for e in entries.filter({ $0.category == .upcoming }).sorted(by: { $0.dueDate > $1.dueDate }) {
                 if total() <= cap { break }
-                if preKept.remove(e.id) != nil { wasTrimmed = true }
+                if preKept.remove(e.id) != nil { wasTrimmed = true; preTrimmed += 1 }
             }
         }
         // 2. Shorten chains uniformly, down to the five-ping floor.
@@ -353,7 +388,7 @@ public enum NotificationPlanner {
         }
         emit(upcoming, .upcoming)
         emit(overdue, .overdue)
-        return (out, wasTrimmed, groupCount)
+        return (out, wasTrimmed, groupCount, preTrimmed, initialDepth - depth)
     }
 
     /// One escalating merge: same room+window → same window (cross-room) → global.
