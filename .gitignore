@@ -1,0 +1,13 @@
+# SwiftPM
+.build/
+.swiftpm/
+Package.resolved
+
+# macOS / Xcode
+.DS_Store
+*.xcodeproj/xcuserdata/
+xcuserdata/
+DerivedData/
+
+# Node (verification cross-check)
+node_modules/
