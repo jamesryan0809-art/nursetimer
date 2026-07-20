@@ -1,122 +1,120 @@
-# NurseTimer — Shared Scheduling Layer (Milestone 1)
+# NurseTimer
 
-Foundation-only scheduling engine + notification planner for NurseTimer, plus the
-SwiftData persistence layer. **No UI in this milestone** (per build order §9 step 1).
+A local-only, privacy-first task and medication **reminder organizer** for nurses —
+iPhone + Apple Watch. "A smart alarm clock organized by patient," not a clinical
+system. It has **no networking, no accounts, no cloud, and no clinical
+decision-support** (see [BUILD_SPEC.md](BUILD_SPEC.md) §1.2 hard non-goals).
 
-This is a **Swift Package** (not an Xcode project) so the scheduling logic can be
-built and unit-tested with `swift test` on any Swift toolchain — the iOS/watchOS
-apps will be an Xcode project that consumes these library targets later.
+The authoritative specification is [BUILD_SPEC.md](BUILD_SPEC.md).
 
-## Targets
-
-| Target | Depends on | Frameworks | Purpose |
-|---|---|---|---|
-| `NurseTimerCore` | — | **Foundation only** | Scheduling engine, notification planner, value types, `SchedulableTask` protocol |
-| `NurseTimerModels` | `NurseTimerCore` | SwiftData (guarded) | `@Model` classes (Patient/CareTask/TaskEvent/AppSettings). Wrapped in `#if canImport(SwiftData)` so it is inert off Apple platforms |
-| `NurseTimerCoreTests` | `NurseTimerCore` **only** | XCTest | Unit tests — never touches SwiftData |
-
-The tested code has **zero** SwiftData / SwiftUI / UserNotifications / WatchConnectivity
-imports. The engine operates on the `SchedulableTask` protocol; the SwiftData
-`CareTask` conforms to it so the same engine drives real persisted data on-device.
-
-## Running the tests
-
-```bash
-cd NurseTimer
-swift test          # builds NurseTimerCore + tests only (not the SwiftData target)
-```
-
-On a Mac you can also open `Package.swift` in Xcode and run the test target, then
-add the iOS/watchOS app targets in a workspace alongside this package.
-
-## Test status
-
-**Swift `swift test`: PASSING ✅ — 58 XCTest cases, 0 failures (Swift 6.1.2).**
-**Logic cross-check: PASSING ✅ — 55/55 (Node, Milestone-1 baseline engine).**
-
-The Swift suite was compiled and run for real on **Swift 6.1.2** under **WSL2 /
-Ubuntu 24.04** on this Windows machine:
+## Repository layout
 
 ```
-Build complete!
-Test Suite 'All tests' passed
-   Executed 58 tests, with 0 failures (0 unexpected)
+NurseTimer/
+  Package.swift            # Swift package: the tested scheduling core
+  Sources/
+    NurseTimerCore/        # Foundation-only scheduling engine + NotificationPlanner
+    NurseTimerModels/      # SwiftData @Model layer (guarded; inert off Apple platforms)
+  Tests/NurseTimerCoreTests/
+  project.yml              # (Milestone 1+) declarative Xcode project (XcodeGen)
+  App/                     # (Milestone 2+) iOS app sources
+  Watch/                   # (Milestone 4)  watchOS app sources
+  Widget/                  # (Milestone 4)  WidgetKit extension
+  archive/                 # historical material, not part of the build or verification
 ```
 
-The 58 cases cover the baseline engine plus the three sanctioned Core changes:
-interval validation (10), fail-loud schedule decode / `.needsRepair` (10), and the
-hard 60-notification cap with room/window digest grouping. This confirms not just
-the algorithms but Swift-specific compilation: `Codable`/`Sendable` synthesis on
-`ScheduleType`, `CareTask`'s `SchedulableTask` conformance, and the guarded
-SwiftData `NurseTimerModels` target (which builds to an empty module on Linux via
-`#if canImport(SwiftData)`).
+The scheduling logic lives in the **`NurseTimerCore`** Swift package and is unit-tested;
+both app targets consume it. `NurseTimerModels` holds the SwiftData `@Model` classes,
+wrapped in `#if canImport(SwiftData)` so the package still builds/tests on Linux.
 
-### Reproduce (WSL, Ubuntu 24.04, Swift 6.1.2 already installed)
+## Verification — authoritative source
+
+**The Swift XCTest suite is the single source of truth for scheduling correctness.**
+
+```
+swift test        # Swift 6.1.2 → Executed 58 tests, with 0 failures (0 unexpected)
+```
+
+Last run: **58 XCTest cases, 0 failures**, compiled and executed for real on
+**Swift 6.1.2** under **WSL2 / Ubuntu 24.04**. The suite covers the baseline engine
+plus the three sanctioned Core changes — interval validation, fail-loud schedule
+decode (`.needsRepair`), and the hard 60-notification cap with room/window digest
+grouping — and exercises Swift-specific compilation (`Codable`/`Sendable` synthesis,
+`CareTask`'s `SchedulableTask` conformance, the guarded SwiftData target).
+
+> A historical JavaScript port of the engine lives at
+> [`archive/verification/logic-check.mjs`](archive/verification/logic-check.mjs).
+> It is **retained only as a historical scratch artifact and is NOT an authoritative
+> or independent verification of the Swift implementation** — do not treat its output
+> as validating the Swift code. Run `swift test` for that.
+
+### Reproduce the Swift tests (WSL, Ubuntu 24.04, Swift 6.1.2)
 
 ```powershell
 wsl -d Ubuntu-24.04 -u root -e bash -lc "cd /mnt/d/Dev/NurseTimer && swift test"
 ```
 
-Setup gotchas that were resolved on this machine (documented in case the toolchain
-is reprovisioned):
-- Swift 6.1.2 tarball to `/opt/swift`; needs `libncurses6` at runtime.
-- clang needs a GCC installation (`apt install gcc g++`) or it reports the
-  misleading `Executable "ld" doesn't exist`.
-- SwiftPM compiles `Package.swift` with a sanitized PATH, so the system linker is
-  symlinked into clang's InstalledDir: `/opt/swift/usr/bin/{ld,ld.gold,ld.bfd}`.
+Toolchain setup notes for a reprovisioned machine: Swift 6.1.2 tarball to `/opt/swift`
+(needs `libncurses6`); clang needs `gcc`/`g++` present (else the misleading
+`Executable "ld" doesn't exist`); SwiftPM sanitizes PATH when compiling `Package.swift`,
+so symlink the linker into clang's InstalledDir (`/opt/swift/usr/bin/{ld,ld.gold,ld.bfd}`).
 
-### Portable logic cross-check (any machine, no Swift needed)
+On macOS, just `swift test`, or open `Package.swift` in Xcode. Everything tested is
+Foundation-only, so no Apple-specific setup is needed for the tests.
 
-```bash
-node verification/logic-check.mjs      # -> RESULT: 55 passed, 0 failed
-```
+---
 
-A faithful JS port of the engine + planner running the same scenarios — see
-[verification/logic-check.mjs](verification/logic-check.mjs). Useful on machines
-without a Swift toolchain (e.g. plain Windows).
+## Verify on Mac
 
-### On macOS
+**Status of this repository:** the `NurseTimerCore` package is compiled and tested
+(above). Everything Apple-platform (the Xcode project, the iOS app, the watchOS app,
+the widget) was **authored without a Mac and has NOT been compiled, launched, run in a
+simulator, or run on a device.** Nothing below marked ⬜ has been verified. A Mac with
+Xcode 16+ must complete each item.
 
-Open `Package.swift` in Xcode and run the test target, or `swift test` from the CLI.
-Everything is Foundation-only, so no Apple-specific setup is required for the tests.
+### Project generation & build
+- ⬜ Install XcodeGen (`brew install xcodegen`) — see [Makefile](Makefile) / `make project`.
+- ⬜ `make project` generates `NurseTimer.xcodeproj` without errors.
+- ⬜ Swift package dependencies (`NurseTimerCore`, `NurseTimerModels`) resolve.
+- ⬜ iOS app target compiles.
+- ⬜ watchOS app target compiles.
+- ⬜ Widget extension compiles.
+- ⬜ Signing teams selected locally; bundle IDs / entitlements / companion config valid.
 
-## Verify on Mac — required UI behavior (Core is built; UI is a later milestone)
+### Core (already verified where noted)
+- ✅ Swift XCTest suite: **58 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
+- ⬜ SwiftData model-container initialization.
+- ⬜ CRUD persistence survives relaunch.
 
-Behavior Core enforces that the iOS/watchOS UI must honor (do not build now; noted so
-the UI can't diverge from Core):
+### Behavior Core enforces that the UI must honor
+- **Interval schedule picker (BUILD_SPEC §6.2):** the "Every N" mode must be an
+  hours+minutes picker bounded to **[5 minutes, 24 hours]** so invalid intervals are
+  *unenterable*; `IntervalMinutes` is the backstop, not the primary gate.
+- **Schedule-repair (BUILD_SPEC §6.2/§6.3):** tasks in `NotificationPlan.tasksNeedingRepair`
+  are pinned atop the Board with an unmissable treatment; the app fires a warning
+  notification via `NotificationPlanner.repairWarningIdentifier(taskID:)` (deterministic,
+  so re-detection replaces rather than duplicates; removed after repair); they are
+  excluded from Schedule projections; tapping opens Edit with the schedule field empty
+  and required, all other data preserved; saving calls `CareTask.repair(with:anchor:)`
+  which establishes a fresh `nextDueAt` (the old, untrusted one is never reused).
+- **"Many tasks scheduled" banner (BUILD_SPEC §4.3):** shown when
+  `NotificationPlan.planWasCoalesced` or `.wasTrimmed` is true. A digest
+  (`PlannedNotification.group`) routes on tap to the room-filtered Board
+  (`group.room`) or the whole Board (cross-room, `room == nil`).
 
-- **Interval schedule picker (Add/Edit form, spec §6.2):** the "Every N" schedule
-  mode must be an **hours+minutes wheel/stepper bounded to [5 minutes, 24 hours]**, so
-  invalid intervals are *unenterable*. Core's `IntervalMinutes` failable init is the
-  backstop, not the primary gate — the picker should never be able to submit a value
-  Core would reject.
+---
 
-- **Schedule-repair UI (spec §6.2/§6.3):** a task whose schedule failed to decode is
-  reported in `NotificationPlan.tasksNeedingRepair`. The app must:
-  1. Pin it to the top of the Board with an unmissable error treatment.
-  2. On detection, fire a local notification ("A task's schedule couldn't be loaded —
-     tap to fix") using `NotificationPlanner.repairWarningIdentifier(taskID:)` (a
-     deterministic per-task id) so re-detection **replaces** rather than duplicates the
-     warning; remove that pending warning once the task leaves `tasksNeedingRepair`.
-  3. Exclude the task from the Schedule tab's projections.
-  4. On tap, open the Edit form with the **schedule field empty and required**, all
-     other task data preserved. Saving calls `CareTask.repair(with:anchor:)`, which sets
-     a fresh `nextDueAt` (the old, untrusted one is never reused).
+## Core design decisions (resolved ambiguities)
 
-- **"Many tasks scheduled" banner (spec §4.3):** show the subtle banner when
-  `NotificationPlan.planWasCoalesced` or `.wasTrimmed` is true — some due alerts were
-  merged into digests, or early reminders trimmed, to hold the hard 60-notification cap.
-  A digest group notification (`PlannedNotification.group`) should route on tap to the
-  Board filtered to `group.room` (same-room) or the whole Board (cross-room, `room == nil`).
-
-## Spec ambiguities resolved (see report / code comments)
-
-1. **SwiftPM layout instead of the spec's `Shared/` Xcode folder** — chosen so tests
-   can actually run without Xcode. The Xcode app will consume these library products.
-2. **Explicit-snooze modeling** — added `explicitSnoozeAt: Date?` to `SchedulableTask`
-   so the planner can re-anchor the ping chain to the tap time (spec §4.2 step 4).
-3. **Snooze-chain "auto-extension"** — expressed as a pure recompute: the chain window
-   always slides forward past `now`, so a long-overdue task always yields a full buffer.
-4. **Multiple fixed-times in the horizon** — per §4.3 ("at most 1 pre + 1 due per task")
-   only the single `nextDueAt` is scheduled; the day-timeline/projection view (§6.2) is
-   a separate later milestone.
+1. **SwiftPM layout** for the tested core (not the spec's `Shared/` Xcode folder), so
+   tests run without Xcode. The Xcode app consumes the library products.
+2. **Explicit-snooze modeling** — `explicitSnoozeAt: Date?` on `SchedulableTask` re-anchors
+   the ping chain to the tap time (BUILD_SPEC §4.2 step 4).
+3. **Snooze-chain auto-extension** — a pure recompute: the chain window slides past `now`,
+   so a long-overdue task always yields a full buffer.
+4. **Interval unit is minutes** with validated `[5m, 24h]` bounds; sub-hour cadences (q30min)
+   are first-class.
+5. **Fail-loud decode** — an undecodable schedule becomes `.needsRepair` (never silent PRN),
+   quarantined per task.
+6. **Hard 60-notification cap** with same-room→cross-room digest grouping guarantees the OS
+   64-pending budget is never exceeded and no due time is unrepresented.
