@@ -213,4 +213,24 @@ public struct SchedulerSettings: Equatable, Sendable {
     }
 
     public static let `default` = SchedulerSettings()
+
+    /// Clamp nonsensical settings to safe defaults so the planner can never be handed
+    /// values that make it crash or emit an empty plan (item 1). Returns the sanitized
+    /// settings plus whether anything had to be adjusted.
+    public func validated() -> (settings: SchedulerSettings, adjusted: Bool) {
+        var s = self
+        var adjusted = false
+        func fix<T: Comparable>(_ kp: WritableKeyPath<SchedulerSettings, T>, _ ok: Bool, _ safe: T) {
+            if !ok { s[keyPath: kp] = safe; adjusted = true }
+        }
+        fix(\.maxPlanNotifications, (1...64).contains(maxPlanNotifications), 60)
+        fix(\.minSnoozeDepth, minSnoozeDepth >= 1, 5)
+        fix(\.horizonHours, horizonHours > 0, 12)
+        fix(\.snoozeChainLength, snoozeChainLength >= 1, 20)
+        fix(\.defaultSnoozeMinutes, defaultSnoozeMinutes >= 1, 3)
+        fix(\.defaultLeadTimeMinutes, defaultLeadTimeMinutes >= 0, 15)
+        // Keep the chain floor within the cap.
+        if s.minSnoozeDepth > s.maxPlanNotifications { s.minSnoozeDepth = 5; adjusted = true }
+        return (s, adjusted)
+    }
 }
