@@ -215,6 +215,12 @@ Xcode 16+ must complete each item.
   `ForEach` identity (label is display-only); `ScheduleOccurrence.id` is task+time derived,
   not a fresh UUID. Pending-Mac test: equal clock-hour buckets on consecutive dates render
   as distinct sections.
+- ⬜ **Item 12 (By Time / By Patient toggle):** Schedule tab has a segmented toggle. By Time
+  keeps the hour-bucket view (item 11 identity); By Patient groups the day's projections per
+  patient ("Rm 412 · Metoprolol: 0900 · 1700 · 0100") keyed by patientID/taskID. Both share the
+  exclusions (PRN/paused/needs-repair/completed-once), keep projection styling, and never
+  persist projections as events. Pending-Mac tests: grouping, ordering, exclusions,
+  midnight-crossing occurrences, identity stability.
 
 ### Cross-cutting
 - ⬜ Dynamic Type scales legibly (rows readable at arm's length).

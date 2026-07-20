@@ -10,6 +10,7 @@ struct ScheduleOccurrence: Identifiable {
     var id: String { "\(taskID.uuidString)|\(Int(date.timeIntervalSince1970))" }
     let date: Date
     let taskID: UUID
+    let patientID: UUID?
     let room: String
     let firstName: String?
     let title: String
@@ -70,8 +71,8 @@ enum ScheduleProjector {
     @MainActor
     private static func make(_ task: CareTask, at date: Date) -> ScheduleOccurrence {
         ScheduleOccurrence(
-            date: date, taskID: task.id, room: task.patient?.roomNumber ?? "",
-            firstName: task.patient?.firstName, title: task.title, dosage: task.dosage,
-            isMedication: task.kind == .medication)
+            date: date, taskID: task.id, patientID: task.patient?.id,
+            room: task.patient?.roomNumber ?? "", firstName: task.patient?.firstName,
+            title: task.title, dosage: task.dosage, isMedication: task.kind == .medication)
     }
 }
