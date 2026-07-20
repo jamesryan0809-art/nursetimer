@@ -64,6 +64,35 @@ Foundation-only, so no Apple-specific setup is needed for the tests.
 
 ---
 
+## Building the app (Mac workflow)
+
+The Xcode project is **not** checked in — it is generated from the declarative
+[`project.yml`](project.yml) via [XcodeGen](https://github.com/yonaskolb/XcodeGen),
+so there is no hand-edited `.xcodeproj` to drift or conflict. Generated targets:
+
+| Target | Platform | Bundle id |
+|---|---|---|
+| `NurseTimer` | iOS 17+ | `com.nursetimer.app` |
+| `NurseTimerWatch` | watchOS 10+ | `com.nursetimer.app.watch` |
+| `NurseTimerWidget` | watchOS (WidgetKit ext.) | `com.nursetimer.app.watch.widget` |
+| `NurseTimerAppTests` | iOS unit tests | `com.nursetimer.app.tests` |
+
+Signing is Automatic with **no development team hardcoded** — each developer picks
+their team locally. Info.plist and `.entitlements` templates are checked in under
+`App/`, `Watch/`, `Widget/`.
+
+**On a Mac:**
+1. `git clone https://github.com/jamesryan0809-art/nursetimer.git && cd nursetimer`
+2. Install XcodeGen: `brew install xcodegen` (pinned/tested: **2.43.0**; `mint install yonaskolb/XcodeGen@2.43.0` also works).
+3. `make project` — generates `NurseTimer.xcodeproj` (checks for XcodeGen, prints an install hint if missing).
+4. `open NurseTimer.xcodeproj`.
+5. Select signing teams for each target (Signing & Capabilities).
+6. Build/run `NurseTimer` (iPhone) and `NurseTimerWatch` (Watch) schemes.
+
+No machine-specific signing data or Xcode user state is committed (`.gitignore`).
+
+---
+
 ## Verify on Mac
 
 **Status of this repository:** the `NurseTimerCore` package is compiled and tested

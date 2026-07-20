@@ -3,11 +3,14 @@
 .swiftpm/
 Package.resolved
 
-# macOS / Xcode
-.DS_Store
-*.xcodeproj/xcuserdata/
+# XcodeGen output (generated from project.yml — never checked in)
+*.xcodeproj
+*.xcworkspace
+
+# Xcode user state / build products
 xcuserdata/
 DerivedData/
+*.xcuserstate
 
-# Node (verification cross-check)
-node_modules/
+# macOS
+.DS_Store
