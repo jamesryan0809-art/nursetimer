@@ -196,6 +196,12 @@ Xcode 16+ must complete each item.
   scheduler invoked once; (c) the "Couldn't save — action not recorded." error banner stays
   visible even when a reduction/coalescing condition also occurs (banner priority by rank);
   (d) fetch failures surface a banner + os_log rather than masquerading as valid-empty data.
+- ⬜ **Item 8 (sidecar protection):** the store lives in a dedicated `NurseTimer/` directory
+  whose protection class is set before the store is created, so `-wal`/`-shm` inherit it;
+  reapplied after container init and via `reapplyProtection()`. Verify on Mac: inspect actual
+  protection attributes of the store, `-wal`, and `-shm` after real writes, unlocked AND
+  locked; decide `.complete` vs `.completeUnlessOpen` (one constant `protectionLevel`); confirm
+  lock-screen notification actions record safely or fail visibly without corrupting state.
 
 ### Cross-cutting
 - ⬜ Dynamic Type scales legibly (rows readable at arm's length).
