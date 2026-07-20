@@ -112,6 +112,10 @@ public final class CareTask {
 extension CareTask: SchedulableTask {
     public var kind: TaskKind { TaskKind(rawValue: kindRaw) ?? .generic }
 
+    /// Room of this task's patient ("" if detached). Drives the planner's digest
+    /// grouping (spec §4.3).
+    public var roomNumber: String { patient?.roomNumber ?? "" }
+
     public var scheduleType: ScheduleType {
         // Fail LOUD: an undecodable payload becomes `.needsRepair` (carrying the raw
         // bytes), never a silent `.prn`. Quarantined per-task (spec §4.1).

@@ -121,6 +121,9 @@ public enum TaskAction: String, Codable, Equatable, Hashable, Sendable {
 public protocol SchedulableTask {
     var id: UUID { get }
     var kind: TaskKind { get }
+    /// Room number of the task's patient. Used by the planner's digest grouping
+    /// (spec §4.3). Empty string if the task is detached from a patient.
+    var roomNumber: String { get }
     var scheduleType: ScheduleType { get }
     /// When the task was last marked Given/Done. Nil if never.
     var lastCompletedAt: Date? { get }
@@ -141,6 +144,7 @@ public protocol SchedulableTask {
 public struct TaskSnapshot: SchedulableTask, Equatable, Sendable {
     public let id: UUID
     public let kind: TaskKind
+    public let roomNumber: String
     public let scheduleType: ScheduleType
     public let lastCompletedAt: Date?
     public var nextDueAt: Date?
@@ -152,6 +156,7 @@ public struct TaskSnapshot: SchedulableTask, Equatable, Sendable {
     public init(
         id: UUID = UUID(),
         kind: TaskKind = .medication,
+        roomNumber: String = "?",
         scheduleType: ScheduleType,
         lastCompletedAt: Date? = nil,
         nextDueAt: Date? = nil,
@@ -162,6 +167,7 @@ public struct TaskSnapshot: SchedulableTask, Equatable, Sendable {
     ) {
         self.id = id
         self.kind = kind
+        self.roomNumber = roomNumber
         self.scheduleType = scheduleType
         self.lastCompletedAt = lastCompletedAt
         self.nextDueAt = nextDueAt
@@ -182,25 +188,26 @@ public struct SchedulerSettings: Equatable, Sendable {
     public var horizonHours: Double
     /// Number of pre-computed snooze pings per overdue task. Spec: 20.
     public var snoozeChainLength: Int
-    /// Soft limit: above this we trim furthest pre-alerts and surface a banner. Spec: ~55.
-    public var softLimit: Int
-    /// Hard OS ceiling on pending local notifications. Spec: 64.
-    public var hardCap: Int
+    /// **Hard invariant**: the emitted plan never exceeds this many notifications.
+    /// Kept below the OS's 64-pending cap for headroom (spec §4.3).
+    public var maxPlanNotifications: Int
+    /// Floor for uniform snooze-chain depth reduction under budget pressure (spec §4.3).
+    public var minSnoozeDepth: Int
 
     public init(
         defaultLeadTimeMinutes: Int = 15,
         defaultSnoozeMinutes: Int = 3,
         horizonHours: Double = 12,
         snoozeChainLength: Int = 20,
-        softLimit: Int = 55,
-        hardCap: Int = 64
+        maxPlanNotifications: Int = 60,
+        minSnoozeDepth: Int = 5
     ) {
         self.defaultLeadTimeMinutes = defaultLeadTimeMinutes
         self.defaultSnoozeMinutes = defaultSnoozeMinutes
         self.horizonHours = horizonHours
         self.snoozeChainLength = snoozeChainLength
-        self.softLimit = softLimit
-        self.hardCap = hardCap
+        self.maxPlanNotifications = maxPlanNotifications
+        self.minSnoozeDepth = minSnoozeDepth
     }
 
     public static let `default` = SchedulerSettings()

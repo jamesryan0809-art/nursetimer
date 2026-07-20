@@ -2,7 +2,7 @@
 
 A local-only, privacy-first task and medication reminder app for nurses. iPhone + Apple Watch. Think "smart alarm clock organized by patient," not a clinical system.
 
-> **Change log (Core-only, Milestone 1).** Sections amended after v1.0 are marked with the change tag that introduced them, e.g. **[interval-validation]**, **[fail-loud-decode]**.
+> **Change log (Core-only, Milestone 1).** Sections amended after v1.0 are marked with the change tag that introduced them, e.g. **[interval-validation]**, **[fail-loud-decode]**, **[hard-cap-grouping]**.
 
 ---
 
@@ -82,8 +82,18 @@ For a task due at D with lead L and snooze interval S:
 3. If not acted on: re-ping every S minutes — a chain of 20 pre-computed snooze notifications (D+S … D+20S), the whole chain cancelled by acting on the task, extended on foreground/action when fewer than 5 remain.
 4. Explicit Snooze: cancels current chain, schedules a new chain starting at `now + S`.
 
-### 4.3 Notification budget management
-The 64-pending-notification OS cap is the binding constraint. Only the next 12 hours of due times are scheduled. Deterministic identifiers: `"{taskID}|{dueISO8601}|{slot}"` where slot ∈ `pre`, `due`, `snooze-N`. Per task at most: 1 pre-alert + 1 due alert + the active snooze chain (overdue only). The planner recomputes the full pending set on every data change / foreground (cancel-all then reschedule). If the plan exceeds ~55 notifications, the furthest-out pre-alerts are dropped first and a subtle banner is surfaced. Due alerts are never dropped.
+### 4.3 Notification budget management **[hard-cap-grouping]**
+The OS caps pending local notifications at 64. NurseTimer enforces a **strict, hard invariant: the emitted plan NEVER exceeds 60 notifications** (headroom below 64), and **no task's due time ever goes completely unrepresented**.
+
+Only the next 12 hours of due times are scheduled. The planner recomputes the full pending set on every data change / foreground (cancel-all then reschedule). Deterministic identifiers: `"{taskID}|{dueISO8601}|{slot}"` (slot ∈ `pre`, `due`, `snooze-N`); digest groups use `"group|{room}|{windowStartISO8601}"` (same-room) or `"group|*|{windowStartISO8601}"` (cross-room).
+
+**Reduction order when a plan would exceed 60 (each step applied only as far as needed):**
+- **a. Trim pre-alerts**, furthest-out first.
+- **b. Trim snooze-chain depth uniformly** (20 → as low as 5 pings per chain; never below 5 under normal load).
+- **c. Coalesce due alerts into grouped digests** — key is *same room, due within the same fixed 30-minute window*. One notification titled e.g. `"4 tasks due · Rm 422 · next 30 min"`, carrying the member task IDs so a tap routes to the room-filtered Board. Individual due alerts are always preferred; grouping is the escape valve, applied furthest-window-first.
+- **d. Coalesce across rooms by 30-minute window** — e.g. `"6 tasks due · 3 rooms · by 14:30"`. A 12-hour horizon spans at most 24 windows, so cross-room grouping guarantees the due representation fits under 60.
+
+A `.needsRepair` task contributes zero notifications and is reported separately (§4.1). The plan carries UI flags: `planWasCoalesced: Bool` + `coalescedGroupCount`, `wasTrimmed: Bool`, and `tasksNeedingRepair: [TaskID]` — driving the spec's "many tasks scheduled" banner.
 
 ### 4.4 Interruption level
 `.timeSensitive`. No Critical Alerts in v1 (v2 candidate).

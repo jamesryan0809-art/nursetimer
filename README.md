@@ -31,22 +31,25 @@ add the iOS/watchOS app targets in a workspace alongside this package.
 
 ## Test status
 
-**Swift `swift test`: PASSING ✅ — 32 XCTest cases, 0 failures (Swift 6.1.2).**
-**Logic cross-check: PASSING ✅ — 55/55 (Node).**
+**Swift `swift test`: PASSING ✅ — 58 XCTest cases, 0 failures (Swift 6.1.2).**
+**Logic cross-check: PASSING ✅ — 55/55 (Node, Milestone-1 baseline engine).**
 
 The Swift suite was compiled and run for real on **Swift 6.1.2** under **WSL2 /
 Ubuntu 24.04** on this Windows machine:
 
 ```
-Build complete! (11.83s)
+Build complete!
 Test Suite 'All tests' passed
-   Executed 32 tests, with 0 failures (0 unexpected)
+   Executed 58 tests, with 0 failures (0 unexpected)
 ```
 
-This confirms not just the algorithms but Swift-specific compilation:
-`Codable`/`Sendable` synthesis on `ScheduleType`, `CareTask`'s `SchedulableTask`
-conformance, and the guarded SwiftData `NurseTimerModels` target (which builds to
-an empty module on Linux via `#if canImport(SwiftData)`).
+The 58 cases cover the baseline engine plus the three sanctioned Core changes:
+interval validation (10), fail-loud schedule decode / `.needsRepair` (10), and the
+hard 60-notification cap with room/window digest grouping. This confirms not just
+the algorithms but Swift-specific compilation: `Codable`/`Sendable` synthesis on
+`ScheduleType`, `CareTask`'s `SchedulableTask` conformance, and the guarded
+SwiftData `NurseTimerModels` target (which builds to an empty module on Linux via
+`#if canImport(SwiftData)`).
 
 ### Reproduce (WSL, Ubuntu 24.04, Swift 6.1.2 already installed)
 
@@ -99,6 +102,12 @@ the UI can't diverge from Core):
   4. On tap, open the Edit form with the **schedule field empty and required**, all
      other task data preserved. Saving calls `CareTask.repair(with:anchor:)`, which sets
      a fresh `nextDueAt` (the old, untrusted one is never reused).
+
+- **"Many tasks scheduled" banner (spec §4.3):** show the subtle banner when
+  `NotificationPlan.planWasCoalesced` or `.wasTrimmed` is true — some due alerts were
+  merged into digests, or early reminders trimmed, to hold the hard 60-notification cap.
+  A digest group notification (`PlannedNotification.group`) should route on tap to the
+  Board filtered to `group.room` (same-room) or the whole Board (cross-room, `room == nil`).
 
 ## Spec ambiguities resolved (see report / code comments)
 

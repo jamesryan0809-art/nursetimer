@@ -95,7 +95,7 @@ final class ScheduleRepairTests: XCTestCase {
 
         let plan = NotificationPlanner.plan(tasks: [broken, good], settings: .default, now: now, calendar: cal)
         // The healthy sibling still schedules its pre + due.
-        XCTAssertEqual(plan.notifications.map { $0.slot }, [.pre, .due])
+        XCTAssertEqual(plan.notifications.map { $0.kind }, [.pre, .due])
         XCTAssertTrue(plan.notifications.allSatisfy { $0.taskID == goodID })
         XCTAssertEqual(plan.tasksNeedingRepair, [id1])
     }
@@ -126,7 +126,7 @@ final class ScheduleRepairTests: XCTestCase {
 
         let plan = NotificationPlanner.plan(tasks: [repaired], settings: .default, now: now, calendar: cal)
         XCTAssertTrue(plan.tasksNeedingRepair.isEmpty)                // no longer flagged
-        XCTAssertEqual(plan.notifications.map { $0.slot }, [.pre, .due])
+        XCTAssertEqual(plan.notifications.map { $0.kind }, [.pre, .due])
         XCTAssertEqual(plan.notifications.last?.fireDate, freshDue)   // scheduled at the fresh due
     }
 
