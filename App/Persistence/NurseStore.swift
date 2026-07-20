@@ -225,20 +225,33 @@ final class NurseStore {
         return task
     }
 
+    /// Item 9 — Last-Given edit coherence. `lastGiven` reflects the form's toggle:
+    /// non-nil = submitted value, nil = cleared. Rules:
+    ///  - A submitted Last Given updates `lastCompletedAt` REGARDLESS of a schedule change.
+    ///  - Clearing it sets `lastCompletedAt = nil`.
+    ///  - `nextDueAt` recomputes via the SAME Core path as creation (`firstDue`) whenever the
+    ///    schedule or the anchor changed, anchored to `lastGiven ?? now`.
+    ///  - schedule, anchor, lastCompletedAt, and nextDueAt commit atomically (item 7).
     func updateTask(_ task: CareTask, kind: TaskKind, title: String, dosage: String?, route: String?,
                     schedule: ScheduleType, lastGiven: Date?, leadTimeMinutes: Int?, snoozeMinutes: Int?) {
+        let priorLastGiven = task.lastCompletedAt
         let scheduleChanged = task.scheduleType != schedule
+        let anchorChanged = lastGiven != priorLastGiven
+
         task.kindRaw = kind.rawValue
         task.title = title
         task.dosage = dosage
         task.route = route
         task.leadTimeMinutes = leadTimeMinutes
         task.snoozeMinutes = snoozeMinutes
-        if scheduleChanged {
-            task.scheduleType = schedule
+        task.scheduleType = schedule
+        task.lastCompletedAt = lastGiven          // always reflect the form (submit or clear)
+
+        if scheduleChanged || anchorChanged {
             task.explicitSnoozeAt = nil
             task.nextDueAt = SchedulingEngine.firstDue(for: schedule, anchor: lastGiven ?? .now, calendar: calendar)
-        } else if let lastGiven { task.lastCompletedAt = lastGiven }
+        }
+        task.updatedAt = .now
         commit()
     }
 

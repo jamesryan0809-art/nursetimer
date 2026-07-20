@@ -135,7 +135,7 @@ Bottom tab bar: **Board**, **Schedule**, **Log**. Settings via gear; Shift Revie
 - **Add/Edit Task form:**
   - kind toggle; title (free text); dosage/route (med only).
   - **Schedule picker [interval-validation]:** *Every N hours + minutes* is an **hours+minutes wheel/stepper bounded to [5 minutes, 24 hours]**, so out-of-range/nonsense intervals are **unenterable** — Core's `IntervalMinutes` validation is the backstop, not the primary gate. Other modes: At set times / Once / PRN.
-  - last-given time (optional; if set for interval meds, computes `nextDueAt` immediately).
+  - **Last Given time (optional) [last-given-coherence]:** the toggle's value is authoritative — a submitted value updates `lastCompletedAt` **regardless of whether the schedule changed**; clearing the toggle sets `lastCompletedAt = nil`. Whenever the schedule or the anchor changes, `nextDueAt` recomputes via the **same Core path used at creation** (`SchedulingEngine.firstDue`, anchored to `lastGiven ?? now`). Schedule, anchor, `lastCompletedAt`, and `nextDueAt` commit **atomically**.
   - per-task lead & snooze overrides under "Advanced".
   - **Repair flow [fail-loud-decode]:** when opened for a `.needsRepair` task, the schedule field is **empty and required**; **all other task data is preserved**. Saving a repaired schedule clears the repair state and establishes a **new** valid `nextDueAt` from the selected schedule + anchor time — the old (untrusted) `nextDueAt` is **not** reused.
 - **Shift Review**, **Log tab**, **Settings** — as v1.0.

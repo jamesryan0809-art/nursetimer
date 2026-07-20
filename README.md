@@ -202,6 +202,11 @@ Xcode 16+ must complete each item.
   protection attributes of the store, `-wal`, and `-shm` after real writes, unlocked AND
   locked; decide `.complete` vs `.completeUnlessOpen` (one constant `protectionLevel`); confirm
   lock-screen notification actions record safely or fail visibly without corrupting state.
+- ⬜ **Item 9 (last-given coherence):** submitting Last Given updates `lastCompletedAt` even
+  when the schedule changed; clearing it nils `lastCompletedAt`; `nextDueAt` recomputes via
+  `firstDue`; all commit atomically. Pending-Mac tests: change Last Given; clear it; change
+  it together with the schedule; and rollback of schedule/anchor/lastCompletedAt/nextDueAt
+  after a simulated save failure.
 
 ### Cross-cutting
 - ⬜ Dynamic Type scales legibly (rows readable at arm's length).
