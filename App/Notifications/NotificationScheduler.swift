@@ -32,7 +32,9 @@ struct TaskDisplay: Sendable {
     }
 }
 
-protocol NotificationScheduling {
+protocol NotificationScheduling: AnyObject {
+    /// When true, lock-screen content is redacted to room only (spec §6.3).
+    var privacyMode: Bool { get set }
     func apply(plan: NotificationPlan, displays: [UUID: TaskDisplay])
     func removeRepairWarning(taskID: UUID)
     func removeAll()
@@ -51,6 +53,9 @@ final class NotificationScheduler: NotificationScheduling {
 
     private let center = UNUserNotificationCenter.current()
     private let calendar = Calendar.autoupdatingCurrent
+
+    /// Redact lock-screen content to room only when true (spec §6.3). Default ON.
+    var privacyMode = true
 
     func attachDelegate(_ delegate: UNUserNotificationCenterDelegate) {
         center.delegate = delegate
@@ -146,10 +151,15 @@ final class NotificationScheduler: NotificationScheduling {
         center.removeAllDeliveredNotifications()
     }
 
-    // MARK: Content (Milestone 2: full content; redaction is added in Milestone 3)
+    // MARK: Content
+    //
+    // Privacy mode (spec §6.3) redacts to room only — no patient name, med name,
+    // dosage, route, or notes ever appear in a notification. Full detail lives in the
+    // app (behind the app lock). When privacy mode is off, content is descriptive.
 
     private func titleLine(_ d: TaskDisplay?) -> String {
         guard let d else { return "Task due" }
+        if privacyMode { return "Task due · Rm \(d.room)" }
         return "Rm \(d.room) · \(d.title)"
     }
 
@@ -160,6 +170,7 @@ final class NotificationScheduler: NotificationScheduling {
         case .due: phase = "Due now"
         case .snooze: phase = "Still due"
         }
+        if privacyMode { return phase }   // room already in the title; no clinical detail
         let dosage = d?.dosage.map { " · \($0)" } ?? ""
         return phase + dosage
     }

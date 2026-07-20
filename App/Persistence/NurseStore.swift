@@ -220,6 +220,7 @@ final class NurseStore {
 
     func replan() {
         let tasks = planningTasks()
+        scheduler.privacyMode = settings().privacyModeNotifications
         let plan = NotificationPlanner.plan(tasks: tasks, settings: schedulerSettings, now: .now, calendar: calendar)
         let displays = Dictionary(tasks.map { ($0.id, TaskDisplay(task: $0)) }, uniquingKeysWith: { a, _ in a })
         tasksNeedingRepair = Set(plan.tasksNeedingRepair)

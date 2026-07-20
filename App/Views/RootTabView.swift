@@ -5,6 +5,8 @@ import NurseTimerModels
 /// Add/Edit/Repair task sheet and the non-fatal banner.
 struct RootTabView: View {
     @Environment(NurseStore.self) private var store
+    @Environment(AppModel.self) private var app
+    @AppStorage("disclaimerAcknowledged") private var disclaimerAcknowledged = false
     @State private var selection = 0
     @State private var boardRoomFilter: String?
 
@@ -25,6 +27,14 @@ struct RootTabView: View {
         .onChange(of: store.route) { _, route in handle(route) }
         .sheet(item: $store.editRequest) { target in
             NavigationStack { TaskEditView(target: target) }
+        }
+        // First-launch disclaimer (§1.2), acknowledged once.
+        .fullScreenCover(isPresented: Binding(get: { !disclaimerAcknowledged }, set: { _ in })) {
+            DisclaimerView(acknowledged: $disclaimerAcknowledged)
+        }
+        // App lock overlay (§6.3).
+        .overlay {
+            if app.lock.state == .locked { AppLockView() }
         }
     }
 

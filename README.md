@@ -140,6 +140,19 @@ Xcode 16+ must complete each item.
 - ⬜ Safety-relevant failures (scheduling / persistence / registration) surface as banners
   + os_log, never silently dropped.
 
+### Lock / privacy / settings / disclaimer — Milestone 3 (authored, uncompiled)
+- ⬜ App lock via LocalAuthentication: locks on launch (when enabled) and after the
+  configured background timeout; Unlock prompts Face ID / Touch ID / passcode.
+- ⬜ App-lock success, cancellation, failure, timeout all handled; failure keeps it locked
+  and shows the reason; no custom auth, no biometric data stored.
+- ⬜ Privacy mode (default ON) redacts lock-screen notifications to `Task due · Rm X` —
+  no patient name, med name, dosage, route, or notes; full detail only in-app.
+- ⬜ Turning privacy mode off restores descriptive notification content.
+- ⬜ Settings: default lead (5–60) / snooze (1–15); privacy toggle; app-lock toggle +
+  timeout; Clear shift log (confirm); Delete all data (confirm); Disclaimer & About.
+- ⬜ Reminder-affecting settings changes trigger a replan; app-lock changes reconfigure the lock.
+- ⬜ First-launch disclaimer (§1.2 exact wording) shown once and re-viewable in Settings.
+
 ### Behavior Core enforces that the UI must honor
 - **Interval schedule picker (BUILD_SPEC §6.2):** the "Every N" mode must be an
   hours+minutes picker bounded to **[5 minutes, 24 hours]** so invalid intervals are

@@ -12,6 +12,7 @@ struct BoardView: View {
     @Query private var tasks: [CareTask]
     @Binding var roomFilter: String?
     @State private var addingPatient = false
+    @State private var showingSettings = false
 
     private var now: Date { .now }
     private var settings: AppSettings { store.settings() }
@@ -62,6 +63,12 @@ struct BoardView: View {
                         Button("Show all") { roomFilter = nil }
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showingSettings = true } label: { Label("Settings", systemImage: "gear") }
+                }
+            }
+            .sheet(isPresented: $showingSettings) {
+                SettingsView(settings: store.settings())
             }
         }
     }

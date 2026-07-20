@@ -9,6 +9,7 @@ final class AppModel {
     let store: NurseStore
     let scheduler: NotificationScheduler
     let coordinator: NotificationCoordinator
+    let lock = AppLockController()
     var notificationsDenied = false
 
     init(container: ModelContainer, store: NurseStore,
@@ -20,6 +21,9 @@ final class AppModel {
     }
 
     func start() async {
+        let settings = store.settings()
+        lock.configure(enabled: settings.appLockEnabled, timeoutMinutes: settings.appLockTimeoutMinutes)
+        lock.lockIfEnabled()
         let granted = await scheduler.requestAuthorization()
         notificationsDenied = !granted
         if !granted { store.banner = .notificationsDenied() }
@@ -63,7 +67,15 @@ struct NurseTimerApp: App {
                 .modelContainer(app.container)
                 .task { await app.start() }
                 .onChange(of: scenePhase) { _, phase in
-                    if phase == .active { Task { await app.refreshOnForeground() } }
+                    switch phase {
+                    case .active:
+                        app.lock.didBecomeActive()
+                        Task { await app.refreshOnForeground() }
+                    case .background:
+                        app.lock.didEnterBackground()
+                    default:
+                        break
+                    }
                 }
         }
     }
