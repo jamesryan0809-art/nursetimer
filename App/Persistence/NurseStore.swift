@@ -94,10 +94,12 @@ final class NurseStore {
         commit()
     }
 
-    /// Skip advances the schedule WITHOUT recording an administration.
-    func skip(_ task: CareTask, reason: String? = nil, at date: Date = .now) {
+    /// Skip Once: advance the schedule one occurrence without recording an
+    /// administration. The note records the SOURCE only ("in app" / "via notification"
+    /// / "via watch") — the chart is the system of record for clinical reasons.
+    func skip(_ task: CareTask, source: String, at date: Date = .now) {
         guard !task.scheduleType.isNeedsRepair else { return }
-        record(.skipped, on: task, at: date, note: reason)
+        record(.skipped, on: task, at: date, note: source)
         let schedule = task.scheduleType
         task.nextDueAt = SchedulingEngine.nextDueAfterCompletion(schedule: schedule, completedAt: date, calendar: calendar)
         if SchedulingEngine.shouldAutoPauseAfterCompletion(schedule) { task.isPaused = true }
@@ -105,6 +107,18 @@ final class NurseStore {
         commit()
     }
 
+    /// Pause: hold the task (no reminders until resumed), record a `.paused` event with
+    /// the source, and cancel its pending notifications (replan excludes paused tasks).
+    /// Always confirmed in the UI.
+    func pause(_ task: CareTask, source: String, at date: Date = .now) {
+        task.isPaused = true
+        task.explicitSnoozeAt = nil
+        record(.paused, on: task, at: date, note: source)
+        task.updatedAt = date
+        commit()
+    }
+
+    /// Resume (and other non-event pause toggles).
     func setPaused(_ task: CareTask, _ paused: Bool) {
         task.isPaused = paused
         task.updatedAt = .now

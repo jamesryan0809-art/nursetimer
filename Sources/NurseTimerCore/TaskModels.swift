@@ -114,6 +114,8 @@ public enum TaskAction: String, Codable, Equatable, Hashable, Sendable {
     case skipped
     case snoozed
     case missedAcknowledged
+    /// The task was explicitly held via the in-app Pause action.
+    case paused
 }
 
 /// The read-only surface the scheduler needs from a task. The SwiftData model

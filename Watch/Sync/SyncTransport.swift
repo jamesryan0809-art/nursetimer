@@ -53,10 +53,12 @@ struct WatchSnapshot: Sendable {
 }
 
 /// Actions a nurse takes on the watch, destined for the phone (source of truth).
+/// No skip reasons: the phone records only the source ("via watch").
 enum WatchAction: Sendable {
     case given(UUID)
     case snooze(UUID)
-    case skip(UUID, reason: String?)
+    case skipOnce(UUID)
+    case pause(UUID)
 }
 
 /// The eventual phone↔watch channel. Production implementation (WatchConnectivity)
@@ -92,11 +94,13 @@ final class StubSyncTransport: SyncTransport {
 
     func send(_ action: WatchAction) {
         // Optimistic LOCAL update only — explicitly not transmitted to the phone.
+        // A real transport would forward each action (with source "via watch") to the
+        // phone, which is the source of truth for persistence.
         switch action {
-        case .given(let id), .skip(let id, _):
+        case .given(let id), .skipOnce(let id), .pause(let id):
             snapshot.tasks.removeAll { $0.id == id }
         case .snooze:
-            break   // a real transport would push the snooze to the phone
+            break
         }
         onChange?()
     }

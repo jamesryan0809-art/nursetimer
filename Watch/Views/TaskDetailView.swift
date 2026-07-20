@@ -1,12 +1,14 @@
 import SwiftUI
 
-/// Task detail (spec §5.1): three large actions. SNOOZE is the visually dominant /
-/// first action (spec §5.2). SKIP requires a second confirmation with a quick reason.
+/// Task detail (spec §5.1). SNOOZE is the visually dominant / first action (spec §5.2),
+/// then Given/Done, then Skip Once (immediate). Pause is visually subordinate,
+/// physically separated below a divider, and always confirmed (naming task + room).
+/// No skip reasons — the phone records only the source.
 struct TaskDetailView: View {
     @Environment(WatchModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let task: WatchTask
-    @State private var confirmingSkip = false
+    @State private var confirmingPause = false
 
     var body: some View {
         ScrollView {
@@ -27,22 +29,33 @@ struct TaskDetailView: View {
                 }
                 .tint(.green)
 
-                Button(role: .destructive) {
-                    confirmingSkip = true
+                Button {
+                    model.skipOnce(task); dismiss()
                 } label: {
-                    Label("Skip", systemImage: "forward").frame(maxWidth: .infinity)
+                    Label("Skip Once", systemImage: "forward").frame(maxWidth: .infinity)
                 }
+                .tint(.orange)
+
+                Divider().padding(.vertical, 6)
+
+                // Subordinate, separated, destructive — always confirmed.
+                Button(role: .destructive) {
+                    confirmingPause = true
+                } label: {
+                    Label("Pause", systemImage: "pause").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
             }
             .padding(.horizontal, 4)
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
         .navigationTitle("Rm \(task.room)")
-        .confirmationDialog("Skip this task?", isPresented: $confirmingSkip, titleVisibility: .visible) {
-            ForEach(["Refused", "NPO", "Held", "Other"], id: \.self) { reason in
-                Button(reason) { model.skip(task, reason: reason); dismiss() }
-            }
+        .confirmationDialog("Pause this task?", isPresented: $confirmingPause, titleVisibility: .visible) {
+            Button("Pause", role: .destructive) { model.pause(task); dismiss() }
             Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Rm \(task.room) · \(task.title) — no reminders until resumed.")
         }
     }
 

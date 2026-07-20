@@ -80,7 +80,8 @@ final class NotificationScheduler: NotificationScheduling {
         // Snooze must be the visually dominant / first action (spec §5.2).
         let snooze = UNNotificationAction(identifier: Self.actionSnooze, title: "Snooze", options: [])
         let given  = UNNotificationAction(identifier: Self.actionGiven,  title: "Given / Done", options: [])
-        let skip   = UNNotificationAction(identifier: Self.actionSkip,   title: "Skip", options: [.destructive])
+        // Notifications offer Skip Once only — never Pause (spec §5.2).
+        let skip   = UNNotificationAction(identifier: Self.actionSkip,   title: "Skip Once", options: [.destructive])
         let category = UNNotificationCategory(
             identifier: Self.categoryID, actions: [snooze, given, skip],
             intentIdentifiers: [], options: [])

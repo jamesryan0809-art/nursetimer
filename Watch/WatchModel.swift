@@ -36,7 +36,8 @@ final class WatchModel {
 
     var overdueCount: Int { snapshot.tasks.filter { $0.urgency() == .overdue }.count }
 
-    func given(_ task: WatchTask)  { transport.send(.given(task.id)) }
-    func snooze(_ task: WatchTask) { transport.send(.snooze(task.id)) }
-    func skip(_ task: WatchTask, reason: String?) { transport.send(.skip(task.id, reason: reason)) }
+    func given(_ task: WatchTask)    { transport.send(.given(task.id)) }
+    func snooze(_ task: WatchTask)   { transport.send(.snooze(task.id)) }
+    func skipOnce(_ task: WatchTask) { transport.send(.skipOnce(task.id)) }
+    func pause(_ task: WatchTask)    { transport.send(.pause(task.id)) }
 }

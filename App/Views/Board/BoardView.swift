@@ -160,10 +160,12 @@ private struct RepairRow: View {
     }
 }
 
-/// Swipe actions shared by Board and Patient detail (spec §6.2).
+/// Swipe actions shared by Board and Patient detail (spec §6.2). Skip Once executes
+/// immediately; Pause is always confirmed (naming task + room); paused tasks show Resume.
 private struct TaskSwipeActions: ViewModifier {
     let task: CareTask
     let store: NurseStore
+    @State private var confirmingPause = false
 
     func body(content: Content) -> some View {
         content
@@ -181,11 +183,20 @@ private struct TaskSwipeActions: ViewModifier {
                     Label("Edit", systemImage: "pencil")
                 }
                 if !task.scheduleType.isNeedsRepair {
-                    Button { store.snooze(task) } label: { Label("Snooze", systemImage: "zzz") }.tint(.indigo)
-                    Button { store.setPaused(task, !task.isPaused) } label: {
-                        Label(task.isPaused ? "Resume" : "Pause", systemImage: task.isPaused ? "play" : "pause")
-                    }.tint(.gray)
+                    if task.isPaused {
+                        Button { store.setPaused(task, false) } label: { Label("Resume", systemImage: "play") }.tint(.green)
+                    } else {
+                        Button { confirmingPause = true } label: { Label("Pause", systemImage: "pause") }.tint(.gray)
+                        Button { store.snooze(task) } label: { Label("Snooze", systemImage: "zzz") }.tint(.indigo)
+                        Button { store.skip(task, source: "in app") } label: { Label("Skip Once", systemImage: "forward") }.tint(.orange)
+                    }
                 }
+            }
+            .confirmationDialog("Pause this task?", isPresented: $confirmingPause, titleVisibility: .visible) {
+                Button("Pause", role: .destructive) { store.pause(task, source: "in app") }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Rm \(task.patient?.roomNumber ?? "?") · \(task.title) — no reminders until you resume it.")
             }
     }
 }

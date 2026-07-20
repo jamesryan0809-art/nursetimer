@@ -59,7 +59,7 @@ final class NotificationCoordinator: NSObject, UNUserNotificationCenterDelegate 
         switch action {
         case NotificationScheduler.actionGiven:  store.markGivenOrDone(task)
         case NotificationScheduler.actionSnooze: store.snooze(task)
-        case NotificationScheduler.actionSkip:   store.skip(task)
+        case NotificationScheduler.actionSkip:   store.skip(task, source: "via notification")
         default:                                 store.route = .board(room: task.patient?.roomNumber)
         }
     }

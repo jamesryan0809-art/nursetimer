@@ -68,7 +68,7 @@ private struct LogRow: View {
     private var actionWord: String {
         switch event.action {
         case .given: "Given"; case .done: "Done"; case .skipped: "Skipped"
-        case .snoozed: "Snoozed"; case .missedAcknowledged: "Missed (ack)"
+        case .snoozed: "Snoozed"; case .missedAcknowledged: "Missed (ack)"; case .paused: "Paused"
         }
     }
     private var symbol: String {
@@ -77,6 +77,7 @@ private struct LogRow: View {
         case .skipped: "forward.circle.fill"
         case .snoozed: "zzz"
         case .missedAcknowledged: "exclamationmark.circle.fill"
+        case .paused: "pause.circle.fill"
         }
     }
     private var color: Color {
@@ -85,6 +86,7 @@ private struct LogRow: View {
         case .skipped: .secondary
         case .snoozed: .indigo
         case .missedAcknowledged: .orange
+        case .paused: .gray
         }
     }
 }

@@ -58,8 +58,10 @@ Fields: id, kind (`.medication`/`.generic`), title, dosage (String?, med only), 
 
 Built-in generic task quick-picks (prefill title only): Turn/reposition, Vitals, I&O, Blood glucose, Ambulate, Custom.
 
-### 3.3 TaskEvent (shift log)
-Fields: id, taskID, action (`.given`/`.done`/`.skipped`/`.snoozed`/`.missedAcknowledged`), timestamp, note (String?).
+### 3.3 TaskEvent (shift log) **[skip-redesign]**
+Fields: id, taskID, action (`.given`/`.done`/`.skipped`/`.snoozed`/`.missedAcknowledged`/`.paused`), timestamp, note (String?).
+
+`note` records **no clinical reasons** — the chart is the system of record for why. For `.skipped` and `.paused` the note is the **source only**: `"in app"`, `"via notification"`, or `"via watch"`. (`.paused` was added for the in-app Pause action.)
 
 ### 3.4 AppSettings (single row)
 defaultLeadTimeMinutes = 15, defaultSnoozeMinutes = 3, privacyModeNotifications = true, appLockEnabled = true, appLockTimeoutMinutes = 5, shiftStartHour (Int?).
@@ -101,7 +103,15 @@ A `.needsRepair` task contributes zero notifications and is reported separately 
 ---
 
 ## 5. Apple Watch App
-(unchanged from v1.0 — watch target not started until Core is green)
+
+### 5.1 Views **[skip-redesign]**
+- **Now view:** tasks sorted by urgency (OVERDUE → DUE≤15m → upcoming).
+- **Task detail:** actions are **Snooze**, **Given/Done**, **Skip Once**, and **Pause**.
+  - **Skip Once** advances the schedule one occurrence and records a `.skipped` event; it executes immediately on tap. **No reason picker.**
+  - **Pause** holds the task (no reminders until resumed), records a `.paused` event, and is **visually subordinate/destructive, physically separated from Skip Once, and always confirmed** (the confirmation names the task and room).
+
+### 5.2 Notification presentation **[skip-redesign]**
+Custom notification interface with actions **Snooze** (dominant / first), **Given/Done**, and **Skip Once**. **Pause is never offered from a notification.**
 
 ---
 
@@ -110,10 +120,10 @@ A `.needsRepair` task contributes zero notifications and is reported separately 
 ### 6.1 Navigation
 Bottom tab bar: **Board**, **Schedule**, **Log**. Settings via gear; Shift Review from the Board.
 
-### 6.2 Screens (Add/Edit Task form) **[interval-validation] [fail-loud-decode]**
+### 6.2 Screens (Add/Edit Task form) **[interval-validation] [fail-loud-decode] [skip-redesign]**
 - **Board tab:** patients as cards sorted by soonest due; global "Up Next" strip; overdue pinned red at top. **Tasks needing repair (`.needsRepair`) are pinned above everything with an unmissable error treatment [fail-loud-decode]** (see §6.3).
 - **Schedule tab:** day timeline of scheduled + projected occurrences, cluster highlighting, By-Time/By-Patient toggle. **`.needsRepair` tasks are excluded from projections [fail-loud-decode]** — they have no trustworthy schedule.
-- **Patient detail / task list.**
+- **Patient detail / task list.** Row actions: Given/Done, Snooze, Edit, and **Skip Once** / **Pause [skip-redesign]**. Skip Once advances one occurrence (records `.skipped`) and executes immediately. Pause holds the task (records `.paused`), cancels its pending notifications, and is **always confirmed** (naming the task + room). Paused tasks stay on the Board in a paused state with a **Resume** action. No skip reason is collected anywhere.
 - **Add/Edit Task form:**
   - kind toggle; title (free text); dosage/route (med only).
   - **Schedule picker [interval-validation]:** *Every N hours + minutes* is an **hours+minutes wheel/stepper bounded to [5 minutes, 24 hours]**, so out-of-range/nonsense intervals are **unenterable** — Core's `IntervalMinutes` validation is the backstop, not the primary gate. Other modes: At set times / Once / PRN.
