@@ -190,6 +190,12 @@ Xcode 16+ must complete each item.
 ### App-layer audit fixes (items 6–12 — blind-authored, uncompiled)
 - ⬜ **Item 6:** `CareTask.createdAt/updatedAt` added (was assigned but undeclared → compile
   error). Confirm the app compiles and the store migrates (new attributes have defaults).
+- ⬜ **Item 7 (transactional commit):** save runs BEFORE replan; on success replan fires
+  exactly once. Pending-Mac regression tests: (a) simulated `context.save()` failure →
+  `context.rollback()` restores prior state and the scheduler is NOT invoked; (b) success →
+  scheduler invoked once; (c) the "Couldn't save — action not recorded." error banner stays
+  visible even when a reduction/coalescing condition also occurs (banner priority by rank);
+  (d) fetch failures surface a banner + os_log rather than masquerading as valid-empty data.
 
 ### Cross-cutting
 - ⬜ Dynamic Type scales legibly (rows readable at arm's length).

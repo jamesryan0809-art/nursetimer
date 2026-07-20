@@ -29,8 +29,7 @@ final class NurseStore {
     var editRequest: TaskEditTarget?
 
     func task(withID id: UUID) -> CareTask? {
-        let descriptor = FetchDescriptor<CareTask>(predicate: #Predicate { $0.id == id })
-        return try? context.fetch(descriptor).first
+        fetch(FetchDescriptor<CareTask>(predicate: #Predicate { $0.id == id }), "task").first
     }
 
     init(context: ModelContext, scheduler: NotificationScheduling) {
@@ -39,15 +38,44 @@ final class NurseStore {
         _ = settings()   // ensure the singleton settings row exists
     }
 
+    // MARK: Diagnostics + fetch (item 7)
+
+    /// Set a banner without letting a lower-priority message hide a visible higher one —
+    /// a persistence error is never immediately overwritten by a reduction/coalescing info.
+    private func setBanner(_ new: AppBanner) {
+        if let current = banner, current.level.rank > new.level.rank { return }
+        banner = new
+    }
+
+    /// Fetch that SURFACES errors instead of masquerading them as valid-empty data. On
+    /// failure it logs, shows a banner, and returns [] as an explicit degraded state.
+    private func fetch<T>(_ descriptor: FetchDescriptor<T>, _ what: String) -> [T] {
+        do {
+            return try context.fetch(descriptor)
+        } catch {
+            AppLog.persistence.error("Fetch \(what, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            setBanner(.loadFailed(what))
+            return []
+        }
+    }
+
     // MARK: Settings
 
     func settings() -> AppSettings {
-        if let existing = try? context.fetch(FetchDescriptor<AppSettings>()).first {
+        if let existing = fetch(FetchDescriptor<AppSettings>(), "settings").first {
             return existing
         }
+        // No row yet — create and persist. If persistence fails, degrade to an in-memory
+        // instance (explicit degraded state) and surface the error; never crash, never
+        // pretend the empty fetch was valid.
         let created = AppSettings()
         context.insert(created)
-        try? context.save()
+        do {
+            try context.save()
+        } catch {
+            AppLog.persistence.error("Could not create settings row: \(error.localizedDescription, privacy: .public)")
+            setBanner(.saveFailed)
+        }
         return created
     }
 
@@ -56,19 +84,18 @@ final class NurseStore {
     // MARK: Fetches
 
     func activePatients() -> [Patient] {
-        let all = (try? context.fetch(FetchDescriptor<Patient>())) ?? []
-        return all.filter { $0.isActive }.sorted { $0.roomNumber.localizedStandardCompare($1.roomNumber) == .orderedAscending }
+        fetch(FetchDescriptor<Patient>(), "patients")
+            .filter { $0.isActive }
+            .sorted { $0.roomNumber.localizedStandardCompare($1.roomNumber) == .orderedAscending }
     }
 
     func archivedPatients() -> [Patient] {
-        let all = (try? context.fetch(FetchDescriptor<Patient>())) ?? []
-        return all.filter { !$0.isActive }
+        fetch(FetchDescriptor<Patient>(), "patients").filter { !$0.isActive }
     }
 
     /// Every task belonging to an active patient — Core filters paused / needsRepair.
     func planningTasks() -> [CareTask] {
-        let all = (try? context.fetch(FetchDescriptor<CareTask>())) ?? []
-        return all.filter { $0.patient?.isActive == true }
+        fetch(FetchDescriptor<CareTask>(), "tasks").filter { $0.patient?.isActive == true }
     }
 
     // MARK: Task lifecycle
@@ -223,14 +250,18 @@ final class NurseStore {
 
     // MARK: Save + replan
 
-    /// Persist, then recompute the entire notification plan. Persistence and
-    /// scheduling failures are surfaced, never swallowed.
+    /// Transactional commit (item 7): persist FIRST, then replan **exactly once**. On save
+    /// failure, roll back the in-memory mutation (restore last-saved state), surface the
+    /// error, and DO NOT replan — existing scheduled notifications are left untouched, so
+    /// they never reflect never-persisted state.
     func commit() {
         do {
             try context.save()
         } catch {
             AppLog.persistence.error("Save failed: \(error.localizedDescription, privacy: .public)")
-            banner = .persistenceError(error.localizedDescription)
+            context.rollback()          // discard the failed mutation
+            setBanner(.saveFailed)
+            return                      // no replan; scheduler untouched
         }
         replan()
     }
@@ -242,21 +273,23 @@ final class NurseStore {
         let displays = Dictionary(tasks.map { ($0.id, TaskDisplay(task: $0)) }, uniquingKeysWith: { a, _ in a })
         tasksNeedingRepair = Set(plan.tasksNeedingRepair)
         lastPlanWasCoalesced = plan.planWasCoalesced
-        if plan.planWasCoalesced { banner = .planCoalesced(groupCount: plan.coalescedGroupCount) }
+        // Item 10 broadens this from coalescing to ANY reduction (plan.planWasReduced).
+        if plan.planWasCoalesced {
+            setBanner(.remindersReduced(coalesced: true, groupCount: plan.coalescedGroupCount))
+        }
         scheduler.apply(plan: plan, displays: displays)
     }
 
     // MARK: Destructive maintenance (used by Settings in Milestone 3)
 
     func clearLog() {
-        let events = (try? context.fetch(FetchDescriptor<TaskEvent>())) ?? []
-        events.forEach { context.delete($0) }
+        for event in fetch(FetchDescriptor<TaskEvent>(), "log") { context.delete(event) }
         commit()
     }
 
     func deleteAllData() {
-        for patient in (try? context.fetch(FetchDescriptor<Patient>())) ?? [] { context.delete(patient) }
-        for event in (try? context.fetch(FetchDescriptor<TaskEvent>())) ?? [] { context.delete(event) }
+        for patient in fetch(FetchDescriptor<Patient>(), "patients") { context.delete(patient) }
+        for event in fetch(FetchDescriptor<TaskEvent>(), "log") { context.delete(event) }
         scheduler.removeAll()
         commit()
     }
