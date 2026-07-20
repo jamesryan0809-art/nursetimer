@@ -39,16 +39,22 @@ final class NotificationCoordinator: NSObject, UNUserNotificationCenterDelegate 
     @MainActor
     private func handle(identifier: String, action: String) {
         // Repair warning → open the repair flow.
+        // Repair digest ("repairs|{count}") → Board's repair section (item 2).
+        if identifier.hasPrefix("repairs|") {
+            store.route = .board(room: nil)
+            return
+        }
+        // Individual repair warning ("repair|{taskID}") → that task's repair form.
         if identifier.hasPrefix("repair|"),
            let taskID = UUID(uuidString: String(identifier.dropFirst("repair|".count))) {
             store.route = .repairTask(taskID)
             return
         }
-        // Digest group → open the Board (room-filtered when same-room).
-        if identifier.hasPrefix("group|") {
+        // Due / overdue digest group → open the Board (room-filtered when same-room).
+        if identifier.hasPrefix("group|") || identifier.hasPrefix("overdue|") {
             let parts = identifier.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false)
             let room = parts.count >= 2 ? String(parts[1]) : "*"
-            store.route = .board(room: room == "*" ? nil : room)
+            store.route = .board(room: (room == "*" || room == "global") ? nil : room)
             return
         }
         // Individual task notification: "{taskID}|{dueISO}|{slot}".

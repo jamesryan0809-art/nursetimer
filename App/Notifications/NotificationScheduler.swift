@@ -90,13 +90,34 @@ final class NotificationScheduler: NotificationScheduling {
 
     // MARK: Apply plan
 
+    /// Identifiers of repair notifications currently scheduled, so re-plans don't re-buzz
+    /// stable warnings and obsolete ones (repaired / membership changed) get cleared (item 2).
+    private var scheduledRepairIDs: Set<String> = []
+
     func apply(plan: NotificationPlan, displays: [UUID: TaskDisplay]) {
+        // Repair notifications are OWNED by the planner now — the scheduler appends nothing.
+        let repair = plan.notifications.filter { $0.isRepair }
+        let tasks = plan.notifications.filter { !$0.isRepair }
+
+        // Cancel-all-then-reschedule for task notifications (future triggers).
         center.removeAllPendingNotificationRequests()
-        for notification in plan.notifications { schedule(notification, displays: displays) }
-        for taskID in plan.tasksNeedingRepair { scheduleRepairWarning(taskID: taskID, display: displays[taskID]) }
+        for n in tasks { schedule(n, displays: displays, immediate: false) }
+
+        // Reconcile repair notifications: remove obsolete (delivered + pending), add only
+        // newly-appearing ones with an immediate trigger. Stable warnings are left alone.
+        let newRepairIDs = Set(repair.map { $0.identifier })
+        let obsolete = Array(scheduledRepairIDs.subtracting(newRepairIDs))
+        if !obsolete.isEmpty {
+            center.removePendingNotificationRequests(withIdentifiers: obsolete)
+            center.removeDeliveredNotifications(withIdentifiers: obsolete)
+        }
+        for n in repair where !scheduledRepairIDs.contains(n.identifier) {
+            schedule(n, displays: displays, immediate: true)
+        }
+        scheduledRepairIDs = newRepairIDs
     }
 
-    private func schedule(_ n: PlannedNotification, displays: [UUID: TaskDisplay]) {
+    private func schedule(_ n: PlannedNotification, displays: [UUID: TaskDisplay], immediate: Bool) {
         let content = UNMutableNotificationContent()
         content.interruptionLevel = .timeSensitive
         content.sound = .default
@@ -111,11 +132,16 @@ final class NotificationScheduler: NotificationScheduling {
         case .group(let digest):
             content.title = digest.title
             content.body = digest.body
-            content.threadIdentifier = "group"
+            content.threadIdentifier = digest.category == .repair ? "repair" : "group"
+        case .repairWarning(let taskID):
+            let display = displays[taskID]
+            content.title = "A task's schedule couldn't be loaded"
+            content.body = display.map { "Rm \($0.room) · tap to fix" } ?? "Tap to fix"
+            content.threadIdentifier = "repair"
         }
 
-        let request = UNNotificationRequest(
-            identifier: n.identifier, content: content, trigger: trigger(for: n.fireDate))
+        let trg: UNNotificationTrigger? = immediate ? nil : trigger(for: n.fireDate)
+        let request = UNNotificationRequest(identifier: n.identifier, content: content, trigger: trg)
         center.add(request) { error in
             if let error {
                 AppLog.notifications.error("Failed to add \(n.identifier, privacy: .public): \(error.localizedDescription, privacy: .public)")
@@ -123,31 +149,15 @@ final class NotificationScheduler: NotificationScheduling {
         }
     }
 
-    // MARK: Repair warnings (deterministic id → replaces, never duplicates)
-
-    private func scheduleRepairWarning(taskID: UUID, display: TaskDisplay?) {
-        let content = UNMutableNotificationContent()
-        content.title = "A task's schedule couldn't be loaded"
-        content.body = display.map { "Rm \($0.room) · tap to fix" } ?? "Tap to fix"
-        content.interruptionLevel = .timeSensitive
-        content.sound = .default
-        let request = UNNotificationRequest(
-            identifier: NotificationPlanner.repairWarningIdentifier(taskID: taskID),
-            content: content, trigger: nil)   // deliver immediately
-        center.add(request) { error in
-            if let error {
-                AppLog.notifications.error("Failed to add repair warning: \(error.localizedDescription, privacy: .public)")
-            }
-        }
-    }
-
     func removeRepairWarning(taskID: UUID) {
         let id = NotificationPlanner.repairWarningIdentifier(taskID: taskID)
+        scheduledRepairIDs.remove(id)
         center.removePendingNotificationRequests(withIdentifiers: [id])
         center.removeDeliveredNotifications(withIdentifiers: [id])
     }
 
     func removeAll() {
+        scheduledRepairIDs.removeAll()
         center.removeAllPendingNotificationRequests()
         center.removeAllDeliveredNotifications()
     }

@@ -195,6 +195,9 @@ public struct SchedulerSettings: Equatable, Sendable {
     public var maxPlanNotifications: Int
     /// Floor for uniform snooze-chain depth reduction under budget pressure (spec §4.3).
     public var minSnoozeDepth: Int
+    /// At most this many repair warnings are shown individually; above it they coalesce
+    /// into a single repair digest so unbounded repair counts can't breach the cap (item 2).
+    public var repairDigestThreshold: Int
 
     public init(
         defaultLeadTimeMinutes: Int = 15,
@@ -202,7 +205,8 @@ public struct SchedulerSettings: Equatable, Sendable {
         horizonHours: Double = 12,
         snoozeChainLength: Int = 20,
         maxPlanNotifications: Int = 60,
-        minSnoozeDepth: Int = 5
+        minSnoozeDepth: Int = 5,
+        repairDigestThreshold: Int = 5
     ) {
         self.defaultLeadTimeMinutes = defaultLeadTimeMinutes
         self.defaultSnoozeMinutes = defaultSnoozeMinutes
@@ -210,6 +214,7 @@ public struct SchedulerSettings: Equatable, Sendable {
         self.snoozeChainLength = snoozeChainLength
         self.maxPlanNotifications = maxPlanNotifications
         self.minSnoozeDepth = minSnoozeDepth
+        self.repairDigestThreshold = repairDigestThreshold
     }
 
     public static let `default` = SchedulerSettings()
@@ -229,6 +234,7 @@ public struct SchedulerSettings: Equatable, Sendable {
         fix(\.snoozeChainLength, snoozeChainLength >= 1, 20)
         fix(\.defaultSnoozeMinutes, defaultSnoozeMinutes >= 1, 3)
         fix(\.defaultLeadTimeMinutes, defaultLeadTimeMinutes >= 0, 15)
+        fix(\.repairDigestThreshold, repairDigestThreshold >= 1, 5)
         // Keep the chain floor within the cap.
         if s.minSnoozeDepth > s.maxPlanNotifications { s.minSnoozeDepth = 5; adjusted = true }
         return (s, adjusted)

@@ -17,7 +17,7 @@ public enum NotificationSlot: Equatable, Hashable, Sendable {
 }
 
 /// Coarse classification of a planned notification.
-public enum PlannedKind: String, Equatable, Sendable { case pre, due, snooze, group }
+public enum PlannedKind: String, Equatable, Sendable { case pre, due, snooze, group, repairWarning }
 
 /// Which family a digest collapses. Lets the app route a digest tap without re-deriving
 /// intent from the identifier string.
@@ -57,6 +57,9 @@ public struct PlannedNotification: Equatable, Sendable {
     public enum Payload: Equatable, Sendable {
         case task(taskID: UUID, dueDate: Date, slot: NotificationSlot)
         case group(GroupDigest)
+        /// A per-task "schedule couldn't be loaded" warning, planned by the planner and
+        /// scheduled with an immediate trigger (spec §6.3). Item 2.
+        case repairWarning(taskID: UUID)
     }
 
     public init(identifier: String, fireDate: Date, payload: Payload) {
@@ -74,13 +77,27 @@ public struct PlannedNotification: Equatable, Sendable {
             case .snooze: return .snooze
             }
         case .group: return .group
+        case .repairWarning: return .repairWarning
         }
     }
 
-    public var taskID: UUID? { if case .task(let id, _, _) = payload { return id }; return nil }
+    /// Task id for an individual task alert or a repair warning; `nil` for a group.
+    public var taskID: UUID? {
+        switch payload {
+        case .task(let id, _, _): return id
+        case .repairWarning(let id): return id
+        case .group: return nil
+        }
+    }
     public var dueDate: Date? { if case .task(_, let d, _) = payload { return d }; return nil }
     public var slot: NotificationSlot? { if case .task(_, _, let s) = payload { return s }; return nil }
     public var group: GroupDigest? { if case .group(let g) = payload { return g }; return nil }
+    /// True for a repair warning or a repair digest.
+    public var isRepair: Bool {
+        if case .repairWarning = payload { return true }
+        if case .group(let g) = payload { return g.category == .repair }
+        return false
+    }
 }
 
 /// The full pending set for a shift horizon plus flags for the UI banners (spec §4.3).
@@ -202,17 +219,52 @@ public enum NotificationPlanner {
             }
         }
 
-        let result = enforceBudget(entries: entries, settings: settings, calendar: calendar)
+        // Repair warnings are planned FIRST against the cap; task notifications fit the
+        // remainder (item 2). Warnings are exempt from trimming but coalesce into a single
+        // repair digest above the threshold or when they'd otherwise starve the tasks.
+        let repair = repairNotifications(tasksNeedingRepair, settings: settings, now: now)
+        let taskCap = max(0, settings.maxPlanNotifications - repair.notifications.count)
+        let result = enforceBudget(entries: entries, settings: settings, cap: taskCap, calendar: calendar)
 
+        let all = repair.notifications + result.notifications
+        let groupCount = result.groupCount + (repair.isDigest ? 1 : 0)
         return NotificationPlan(
-            notifications: result.notifications.sorted { lhs, rhs in
+            notifications: all.sorted { lhs, rhs in
                 lhs.fireDate != rhs.fireDate ? lhs.fireDate < rhs.fireDate : lhs.identifier < rhs.identifier
             },
             wasTrimmed: result.wasTrimmed,
-            planWasCoalesced: result.groupCount > 0,
-            coalescedGroupCount: result.groupCount,
+            planWasCoalesced: groupCount > 0,
+            coalescedGroupCount: groupCount,
             tasksNeedingRepair: tasksNeedingRepair,
             settingsAdjusted: settingsAdjusted)
+    }
+
+    /// Deterministic identifier for the repair digest; encodes the count so a membership
+    /// change yields a new id (old removed, new delivered) instead of stale content.
+    public static func repairDigestIdentifier(count: Int) -> String { "repairs|\(count)" }
+
+    /// Build the repair-warning notifications (individual, or one digest above threshold /
+    /// under budget pressure). Immediate fire date (`now`).
+    private static func repairNotifications(
+        _ ids: [UUID], settings: SchedulerSettings, now: Date
+    ) -> (notifications: [PlannedNotification], isDigest: Bool) {
+        guard !ids.isEmpty else { return ([], false) }
+        let individualOK = ids.count <= settings.repairDigestThreshold
+            && ids.count <= settings.maxPlanNotifications - 2   // leave room for due + overdue
+        if individualOK {
+            let ns = ids.map {
+                PlannedNotification(identifier: repairWarningIdentifier(taskID: $0),
+                                    fireDate: now, payload: .repairWarning(taskID: $0))
+            }
+            return (ns, false)
+        }
+        let members = ids.sorted { $0.uuidString < $1.uuidString }
+        let digest = GroupDigest(
+            category: .repair, room: nil, windowStart: now, memberTaskIDs: members,
+            title: "\(ids.count) tasks need schedule repair — tap to fix",
+            body: "Tap to open the Board")
+        return ([PlannedNotification(identifier: repairDigestIdentifier(count: ids.count),
+                                     fireDate: now, payload: .group(digest))], true)
     }
 
     // MARK: Internal model
@@ -236,9 +288,8 @@ public enum NotificationPlanner {
     // MARK: Budget enforcement (reduction order: pre → chains → coalesce upcoming → coalesce overdue → global)
 
     private static func enforceBudget(
-        entries: [TaskEntry], settings: SchedulerSettings, calendar: Calendar
+        entries: [TaskEntry], settings: SchedulerSettings, cap: Int, calendar: Calendar
     ) -> (notifications: [PlannedNotification], wasTrimmed: Bool, groupCount: Int) {
-        let cap = settings.maxPlanNotifications
         let floor = settings.minSnoozeDepth
         let byID = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
 

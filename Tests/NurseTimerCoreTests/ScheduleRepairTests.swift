@@ -65,7 +65,12 @@ final class ScheduleRepairTests: XCTestCase {
                                   scheduleType: .needsRepair(rawPayload: Data("bad".utf8)),
                                   nextDueAt: now.addingTimeInterval(30 * 60))
         let plan = NotificationPlanner.plan(tasks: [broken], settings: .default, now: now, calendar: cal)
-        XCTAssertTrue(plan.notifications.isEmpty)
+        // Item 2: a needsRepair task emits exactly one repair WARNING (no task alerts) and
+        // is still reported in tasksNeedingRepair. Its untrusted nextDueAt is never used.
+        XCTAssertEqual(plan.notifications.count, 1)
+        XCTAssertEqual(plan.notifications.first?.kind, .repairWarning)
+        XCTAssertEqual(plan.notifications.first?.taskID, id1)
+        XCTAssertFalse(plan.notifications.contains { [.pre, .due, .snooze].contains($0.kind) })
         XCTAssertEqual(plan.tasksNeedingRepair, [id1])
     }
 
@@ -77,7 +82,8 @@ final class ScheduleRepairTests: XCTestCase {
                                   nextDueAt: now.addingTimeInterval(30 * 60),
                                   isPaused: true)
         let plan = NotificationPlanner.plan(tasks: [broken], settings: .default, now: now, calendar: cal)
-        XCTAssertTrue(plan.notifications.isEmpty)
+        XCTAssertEqual(plan.notifications.count, 1)
+        XCTAssertEqual(plan.notifications.first?.kind, .repairWarning)
         XCTAssertEqual(plan.tasksNeedingRepair, [id1])
     }
 
@@ -94,9 +100,9 @@ final class ScheduleRepairTests: XCTestCase {
                                 nextDueAt: dt(cal, 2026, 7, 19, 16, 30))   // 30 min out
 
         let plan = NotificationPlanner.plan(tasks: [broken, good], settings: .default, now: now, calendar: cal)
-        // The healthy sibling still schedules its pre + due.
-        XCTAssertEqual(plan.notifications.map { $0.kind }, [.pre, .due])
-        XCTAssertTrue(plan.notifications.allSatisfy { $0.taskID == goodID })
+        // The healthy sibling still schedules its pre + due; the broken one gets a warning.
+        XCTAssertEqual(plan.notifications.filter { $0.taskID == goodID }.map { $0.kind }, [.pre, .due])
+        XCTAssertTrue(plan.notifications.contains { $0.kind == .repairWarning && $0.taskID == id1 })
         XCTAssertEqual(plan.tasksNeedingRepair, [id1])
     }
 
