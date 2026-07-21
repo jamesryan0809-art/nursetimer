@@ -178,6 +178,11 @@ Xcode 16+ must complete each item.
   title → schedule (with consequence preview) → PRN frequency (PRN only) → last given → Details
   (dosage, route — med only, at the bottom) → color tag. Confirm the flow reads top-to-bottom
   and that Details/color-tag still save correctly from their new positions.
+- ⬜ **Non-blocking reduction (feedback pass 3, item 2):** the "many tasks scheduled" reduction
+  no longer sits in the top banner. Confirm it shows as a one-time-per-change dismissible alert
+  (on app open / when it first becomes true) and a persistent tappable nav-bar indicator
+  (`bell.badge`) on the Board that re-shows details; it must NOT obstruct controls. Verify a
+  persistence-error banner still appears at top with full priority (not demoted).
 - ⬜ **Overdue persists in Schedule (feedback pass 3, item 4):** an overdue (uncompleted,
   unskipped) occurrence stays visible in all three modes — a pinned red "Overdue" section at
   top of By-Time, red (non-dimmed) rows in By-Patient, red cells in Grid (above the now row,

@@ -107,6 +107,8 @@ Only the next 12 hours are scheduled; the planner recomputes the whole set on ev
 
 The global tier guarantees representation (worst case: one digest per category ≤ cap). Plan flags: `planWasReduced: Bool` + `ReductionSummary { preAlertsTrimmed, chainDepthReduced, digestsFormed }` (item 4), plus `planWasCoalesced`/`coalescedGroupCount`, `wasTrimmed`, `settingsAdjusted`, and `tasksNeedingRepair: [TaskID]`.
 
+**Reduction surfacing is non-blocking (design pass, feedback item 2).** Reminder reduction is informational, not an error, so it no longer occupies the top-of-screen banner (which obstructed controls). Instead it drives: (a) a **one-time-per-change**, dismissible alert on app open and whenever the reduction condition first becomes true or its details change; and (b) a small **persistent, tappable nav-bar indicator** on the Board while reduction is active, which re-shows the details on demand. Every task remains on the board — only ping timing is adjusted. **Persistence-error banners are unaffected and keep their existing priority** — they are never demoted by this change.
+
 ### 4.4 Interruption level
 `.timeSensitive`. No Critical Alerts in v1 (v2 candidate).
 

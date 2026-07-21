@@ -18,13 +18,6 @@ struct AppBanner: Identifiable, Equatable {
         AppBanner(level: .warning,
                   message: "Reminders are off. NurseTimer works as a visual board, but it can't ping you. Enable notifications in Settings.")
     }
-    /// Reminders were reduced to fit the budget — trimming and/or grouping (item 10).
-    static func remindersReduced(coalesced: Bool, groupCount: Int) -> AppBanner {
-        let detail = coalesced
-            ? "\(groupCount) reminder group\(groupCount == 1 ? "" : "s") were combined"
-            : "some early reminders were trimmed"
-        return AppBanner(level: .info, message: "Many tasks scheduled — \(detail) to stay under the reminder limit.")
-    }
     static func schedulingError(_ detail: String) -> AppBanner {
         AppBanner(level: .error, message: "Couldn't update reminders: \(detail)")
     }
@@ -32,5 +25,28 @@ struct AppBanner: Identifiable, Equatable {
     static let saveFailed = AppBanner(level: .error, message: "Couldn't save — action not recorded.")
     static func loadFailed(_ what: String) -> AppBanner {
         AppBanner(level: .error, message: "Couldn't load \(what).")
+    }
+}
+
+/// Non-blocking reminder-reduction indicator (feedback item 2). Reminders being reduced to fit
+/// the OS budget is informational, not an error — so it no longer occupies the top banner
+/// (which obstructed controls). This state drives a one-time-per-change alert and a persistent,
+/// tappable nav-bar indicator instead. All tasks remain on the board regardless.
+struct ReductionState: Equatable {
+    var isActive = false
+    var coalesced = false
+    var groupCount = 0
+    var trimmed = false
+
+    var headline: String { "Reminders adjusted" }
+
+    var detail: String {
+        var parts: [String] = []
+        if coalesced {
+            parts.append("\(groupCount) reminder group\(groupCount == 1 ? "" : "s") combined")
+        }
+        if trimmed { parts.append("some early reminders trimmed") }
+        let what = parts.isEmpty ? "some reminders were reduced" : parts.joined(separator: " and ")
+        return "Many tasks are scheduled, so \(what) to stay under the reminder limit. Every task is still on your board — only the ping timing was adjusted."
     }
 }

@@ -23,6 +23,10 @@ final class NurseStore {
     var tasksNeedingRepair: Set<UUID> = []
     /// Whether the last plan coalesced/trimmed to fit the budget (drives the banner).
     var lastPlanWasCoalesced = false
+    /// Non-blocking reduction indicator state (feedback item 2). Replaces the top-of-screen
+    /// reduction banner: a one-time-per-change alert plus a persistent nav-bar indicator read
+    /// this instead. Persistence-error banners are unaffected and keep their priority.
+    var reduction = ReductionState()
     /// Deep-link intent from a notification tap (root view observes it).
     var route: AppRoute?
     /// Centralized Add/Edit/Repair task presentation (root presents the sheet).
@@ -336,11 +340,14 @@ final class NurseStore {
         let displays = Dictionary(tasks.map { ($0.id, TaskDisplay(task: $0)) }, uniquingKeysWith: { a, _ in a })
         tasksNeedingRepair = Set(plan.tasksNeedingRepair)
         lastPlanWasCoalesced = plan.planWasCoalesced
-        // Item 10: banner on ANY reduction (pre-alert trim, chain shortening, OR coalescing),
-        // not only grouping. setBanner keeps it from overwriting a visible error banner.
-        if plan.planWasReduced {
-            setBanner(.remindersReduced(coalesced: plan.planWasCoalesced, groupCount: plan.coalescedGroupCount))
-        }
+        // Feedback item 2: reduction is no longer a top-of-screen banner (it obstructed
+        // controls). It now drives a non-blocking, one-time-per-change alert plus a persistent
+        // nav-bar indicator, via `reduction`. Persistence errors keep the banner + their priority.
+        reduction = ReductionState(
+            isActive: plan.planWasReduced,
+            coalesced: plan.planWasCoalesced,
+            groupCount: plan.coalescedGroupCount,
+            trimmed: plan.wasTrimmed)
         scheduler.apply(plan: plan, displays: displays)
     }
 

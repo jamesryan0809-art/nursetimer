@@ -13,6 +13,7 @@ struct BoardView: View {
     @Binding var roomFilter: String?
     @State private var addingPatient = false
     @State private var showingSettings = false
+    @State private var showingReductionInfo = false
 
     private var now: Date { .now }
     private var settings: AppSettings { store.settings() }
@@ -61,9 +62,24 @@ struct BoardView: View {
             .navigationDestination(for: Patient.self) { PatientDetailView(patient: $0) }
             .sheet(isPresented: $addingPatient) { NavigationStack { PatientFormView(patient: nil) } }
             .sheet(isPresented: $showingSettings) { SettingsView(settings: store.settings()) }
+            // Persistent, tappable reduction indicator (feedback item 2) — replaces the blocking
+            // top banner; tapping re-shows the details.
+            .alert(store.reduction.headline, isPresented: $showingReductionInfo) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(store.reduction.detail)
+            }
             .toolbar {
                 if roomFilter != nil {
                     ToolbarItem(placement: .topBarLeading) { Button("Show all") { roomFilter = nil } }
+                }
+                if store.reduction.isActive {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button { showingReductionInfo = true } label: {
+                            Label("Reminders adjusted", systemImage: "bell.badge")
+                        }
+                        .accessibilityLabel("Reminders adjusted — tap for details")
+                    }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { addingPatient = true } label: { Label("Add Patient", systemImage: "plus") }

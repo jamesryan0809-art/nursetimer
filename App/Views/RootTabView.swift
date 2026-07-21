@@ -9,6 +9,8 @@ struct RootTabView: View {
     @AppStorage("disclaimerAcknowledged") private var disclaimerAcknowledged = false
     @State private var selection = 0
     @State private var boardRoomFilter: String?
+    /// The reduction detail to show in the one-time-per-change alert (feedback item 2).
+    @State private var reductionAlert: ReductionState?
 
     var body: some View {
         @Bindable var store = store
@@ -24,6 +26,17 @@ struct RootTabView: View {
                 .tag(2)
         }
         .safeAreaInset(edge: .top) { BannerView(banner: $store.banner) }
+        // Reduction is non-blocking now (feedback item 2): a dismissible alert on app open and
+        // when the reduction first becomes true or changes; a persistent nav-bar indicator
+        // (BoardView) lets the nurse re-show details anytime. Cleared when reduction resolves.
+        .onChange(of: store.reduction) { _, new in reductionAlert = new.isActive ? new : nil }
+        .alert(reductionAlert?.headline ?? "Reminders adjusted",
+               isPresented: Binding(get: { reductionAlert != nil },
+                                    set: { if !$0 { reductionAlert = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(reductionAlert?.detail ?? "")
+        }
         .onChange(of: store.route) { _, route in handle(route) }
         .sheet(item: $store.editRequest) { target in
             NavigationStack { TaskEditView(target: target) }
