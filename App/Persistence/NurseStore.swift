@@ -103,13 +103,21 @@ final class NurseStore {
 
     // MARK: Task lifecycle
 
+    /// Given/Done is valid at ANY time (early, on time, or late) and always records the actual
+    /// completion time. It completes the current upcoming occurrence and advances the schedule
+    /// per Core's anchoring rules; passing `currentDue` lets fixed-time schedules advance past
+    /// an EARLY completion instead of re-resolving to the same occurrence (feedback item 5).
+    /// The subsequent `commit()`→`replan()` cancels this occurrence's pending pre/due/taper
+    /// notifications (cancel-all-then-reschedule from the new `nextDueAt`).
     func markGivenOrDone(_ task: CareTask, at date: Date = .now, note: String? = nil) {
         guard !task.scheduleType.isNeedsRepair else { return }
         let action: TaskAction = task.kind == .medication ? .given : .done
         record(action, on: task, at: date, note: note)
-        task.lastCompletedAt = date
         let schedule = task.scheduleType
-        task.nextDueAt = SchedulingEngine.nextDueAfterCompletion(schedule: schedule, completedAt: date, calendar: calendar)
+        let occurrenceDue = task.nextDueAt
+        task.lastCompletedAt = date
+        task.nextDueAt = SchedulingEngine.nextDueAfterCompletion(
+            schedule: schedule, completedAt: date, currentDue: occurrenceDue, calendar: calendar)
         if SchedulingEngine.shouldAutoPauseAfterCompletion(schedule) { task.isPaused = true }
         task.explicitSnoozeAt = nil
         task.updatedAt = date
@@ -133,7 +141,8 @@ final class NurseStore {
         guard !task.scheduleType.isNeedsRepair else { return }
         record(.skipped, on: task, at: date, note: source)
         let schedule = task.scheduleType
-        task.nextDueAt = SchedulingEngine.nextDueAfterCompletion(schedule: schedule, completedAt: date, calendar: calendar)
+        task.nextDueAt = SchedulingEngine.nextDueAfterCompletion(
+            schedule: schedule, completedAt: date, currentDue: task.nextDueAt, calendar: calendar)
         if SchedulingEngine.shouldAutoPauseAfterCompletion(schedule) { task.isPaused = true }
         task.explicitSnoozeAt = nil
         task.updatedAt = date

@@ -25,19 +25,25 @@ public enum SchedulingEngine {
     ///
     /// - `.interval`: anchored to the ACTUAL administration time (`completedAt`),
     ///   not the previous scheduled time — avoids drift-stacking (spec §4.1).
-    /// - `.fixedTimes`: the next listed wall-clock time strictly after completion.
+    /// - `.fixedTimes`: the next listed wall-clock time strictly after the occurrence being
+    ///   completed. `currentDue` is that occurrence's own due time; the reference is
+    ///   `max(completedAt, currentDue)` so an EARLY completion (given before the scheduled
+    ///   time) still advances to the NEXT listed time instead of re-resolving to the same one
+    ///   (feedback item 5). When `currentDue` is nil the reference is `completedAt` (legacy).
     /// - `.once`: nil — the task auto-pauses (see `shouldAutoPauseAfterCompletion`).
     /// - `.prn`: nil — never auto-schedules; only `lastCompletedAt` is updated by the caller.
     public static func nextDueAfterCompletion(
         schedule: ScheduleType,
         completedAt: Date,
+        currentDue: Date? = nil,
         calendar: Calendar
     ) -> Date? {
         switch schedule {
         case .interval(let interval):
             return completedAt.addingTimeInterval(interval.timeInterval)
         case .fixedTimes(let times):
-            return nextFixedTime(after: completedAt, times: times, calendar: calendar)
+            let reference = max(completedAt, currentDue ?? completedAt)
+            return nextFixedTime(after: reference, times: times, calendar: calendar)
         case .once:
             return nil
         case .prn:

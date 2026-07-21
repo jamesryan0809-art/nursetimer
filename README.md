@@ -126,7 +126,7 @@ Xcode 16+ must complete each item.
   in App/Watch/Widget plists (installer required it). Confirm all three targets install.
 
 ### Core (already verified where noted)
-- ✅ Swift XCTest suite: **81 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
+- ✅ Swift XCTest suite: **86 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
 - ⬜ SwiftData model-container initialization (`PersistenceController.makeContainer`).
 - ⬜ Store file is `FileProtectionType.complete` at rest.
 - ⬜ CRUD persistence (patients, tasks, events, settings) survives relaunch.
@@ -178,6 +178,12 @@ Xcode 16+ must complete each item.
   title → schedule (with consequence preview) → PRN frequency (PRN only) → last given → Details
   (dosage, route — med only, at the bottom) → color tag. Confirm the flow reads top-to-bottom
   and that Details/color-tag still save correctly from their new positions.
+- ⬜ **Early Given fix (feedback pass 3, item 5):** mark a FIXED-time task Given before its
+  scheduled time — confirm `nextDueAt` advances to the NEXT listed time (not the same one) and
+  the old due's pre/due/taper notifications are canceled by the replan; the pending due alert
+  must NOT fire. Interval early-Given re-anchors to actual time (unchanged). Within 5 min before
+  due, rows read "Due now" with heavier weight (emphasis only). Covered by
+  `SchedulingEngineTests` (early/late fixed completion + planner-reflects-new-due).
 - ⬜ **Per-med color tag (design pass):** Add/Edit form swatch picker (8-color palette + None)
   persists on `CareTask.colorTagRaw`; migration-safe default "none" on an existing store.
   Renders as a leading channel — left-edge bar on Board / patient-detail / Schedule rows, dot on

@@ -38,7 +38,19 @@ func status(of task: CareTask, now: Date, settings: AppSettings) -> TaskStatus {
 }
 
 enum DueText {
-    /// "12 min overdue" / "in 25 min" / "14:00" — glanceable, arm's-length legible.
+    /// Presentation window (feedback item 5): within this many minutes BEFORE the due time a
+    /// task reads "Due now" for emphasis. This is display emphasis only — it never gates the
+    /// validity of an action (Given/Done is valid at any time).
+    static let dueNowWindowMinutes = 5
+
+    /// True when `due` is within the "Due now" emphasis window (0…5 min before due).
+    static func isDueNowWindow(_ due: Date?, now: Date = .now) -> Bool {
+        guard let due else { return false }
+        let delta = due.timeIntervalSince(now)
+        return delta >= 0 && delta <= Double(dueNowWindowMinutes) * 60
+    }
+
+    /// "12 min overdue" / "Due now" / "in 25 min" / "14:00" — glanceable, arm's-length legible.
     static func string(for due: Date?, now: Date = .now) -> String {
         guard let due else { return "PRN" }
         let delta = due.timeIntervalSince(now)
@@ -47,6 +59,7 @@ enum DueText {
             if minutes < 60 { return "\(minutes) min overdue" }
             return "\(minutes / 60)h \(minutes % 60)m overdue"
         }
+        if isDueNowWindow(due, now: now) { return "Due now" }   // tight pre-due emphasis
         if minutes < 60 { return "in \(minutes) min" }
         return AppTime.short(due)
     }
