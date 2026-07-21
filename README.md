@@ -168,6 +168,12 @@ Xcode 16+ must complete each item.
   NO notifications (Core exclusion, mirrors paused — covered by `NotificationPlannerTests`);
   the task sheet shows the muted banner with one-tap re-enable. Confirm a muted task still
   appears everywhere (silence stays visible) and that unmuting replans and restores reminders.
+- ⬜ **PRN last-given + frequency (design pass, feedback item 3):** a PRN task's Board row and
+  task sheet show "Last given <time> · <N ago>" (live, re-renders each minute) plus the optional
+  free-text Frequency note; the Add/Edit form shows the Frequency field only in PRN mode.
+  `CareTask.prnFrequencyText` is **migration-safe (default empty)**. CONFIRM the frequency is
+  purely display — nothing parses it, computes a next-allowed dose, validates, or alerts
+  (§1.2 non-goal) — and that the elapsed time updates without reopening the view.
 - ⬜ **Per-med color tag (design pass):** Add/Edit form swatch picker (8-color palette + None)
   persists on `CareTask.colorTagRaw`; migration-safe default "none" on an existing store.
   Renders as a leading channel — left-edge bar on Board / patient-detail / Schedule rows, dot on

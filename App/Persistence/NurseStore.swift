@@ -226,10 +226,12 @@ final class NurseStore {
     @discardableResult
     func addTask(to patient: Patient, kind: TaskKind, title: String, dosage: String?, route: String?,
                  schedule: ScheduleType, lastGiven: Date?, leadTimeMinutes: Int?, snoozeMinutes: Int?,
-                 colorTag: TaskColorTag = .none, notificationsEnabled: Bool = true) -> CareTask {
+                 colorTag: TaskColorTag = .none, notificationsEnabled: Bool = true,
+                 prnFrequencyText: String = "") -> CareTask {
         let task = CareTask(kind: kind, title: title, dosage: dosage, route: route,
                             scheduleType: schedule, leadTimeMinutes: leadTimeMinutes, snoozeMinutes: snoozeMinutes,
-                            colorTagRaw: colorTag.rawValue, notificationsEnabled: notificationsEnabled)
+                            colorTagRaw: colorTag.rawValue, notificationsEnabled: notificationsEnabled,
+                            prnFrequencyText: prnFrequencyText)
         task.patient = patient
         task.lastCompletedAt = lastGiven
         task.nextDueAt = SchedulingEngine.firstDue(for: schedule, anchor: lastGiven ?? .now, calendar: calendar)
@@ -247,7 +249,8 @@ final class NurseStore {
     ///  - schedule, anchor, lastCompletedAt, and nextDueAt commit atomically (item 7).
     func updateTask(_ task: CareTask, kind: TaskKind, title: String, dosage: String?, route: String?,
                     schedule: ScheduleType, lastGiven: Date?, leadTimeMinutes: Int?, snoozeMinutes: Int?,
-                    colorTag: TaskColorTag = .none, notificationsEnabled: Bool = true) {
+                    colorTag: TaskColorTag = .none, notificationsEnabled: Bool = true,
+                    prnFrequencyText: String = "") {
         let priorLastGiven = task.lastCompletedAt
         let scheduleChanged = task.scheduleType != schedule
         let anchorChanged = lastGiven != priorLastGiven
@@ -260,6 +263,7 @@ final class NurseStore {
         task.snoozeMinutes = snoozeMinutes
         task.colorTagRaw = colorTag.rawValue      // display-only tag channel (color-tag pass)
         task.notificationsEnabled = notificationsEnabled   // muted-task switch (feedback item 2)
+        task.prnFrequencyText = prnFrequencyText   // display-only PRN guidance (feedback item 3)
         task.scheduleType = schedule
         task.lastCompletedAt = lastGiven          // always reflect the form (submit or clear)
 

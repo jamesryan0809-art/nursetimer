@@ -57,6 +57,39 @@ extension Patient {
     var display: String { "Rm \(roomNumber)" + (firstName.map { " · \($0)" } ?? "") }
 }
 
+/// PRN guidance (feedback item 3): the two facts a nurse needs to decide an as-needed dose —
+/// when it was last given (live elapsed time) and the ordered frequency (free text). Both are
+/// DISPLAY-ONLY: nothing here parses the frequency, computes a next-allowed time, validates, or
+/// alerts — that would be dose-timing calculation (BUILD_SPEC §1.2 non-goal). The nurse reads
+/// and decides.
+struct PRNGuidanceView: View {
+    let lastGiven: Date?
+    let frequencyText: String
+    /// Compact = single caption line for list rows; full = larger, for the task sheet.
+    var compact = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: compact ? 1 : 4) {
+            // Live "Last given 1:07 PM · 2h ago" — re-renders each minute so elapsed stays fresh.
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                if let lastGiven {
+                    Text("Last given \(AppTime.short(lastGiven)) · \(AppTime.relative(lastGiven, now: context.date))")
+                } else {
+                    Text("Not given yet")
+                }
+            }
+            .font(compact ? .caption : .subheadline)
+            .foregroundStyle(.secondary)
+
+            if !frequencyText.isEmpty {
+                Label(frequencyText, systemImage: "clock.arrow.circlepath")
+                    .font(compact ? .caption : .subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
 /// "Muted is loud" (feedback item 2): a muted task must never be silently silent. This badge
 /// is deliberately MONOCHROME (bold icon + label on a neutral capsule) so it stays unmissable
 /// without borrowing a status hue — color remains status-only (spec §7).

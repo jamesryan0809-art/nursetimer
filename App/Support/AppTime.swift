@@ -18,4 +18,13 @@ enum AppTime {
     static func shortList(_ dates: [Date]) -> String {
         dates.map(short).joined(separator: " · ")
     }
+
+    /// Abbreviated elapsed time ("2h ago", "5 min ago") for the PRN last-given display
+    /// (feedback item 3). This is plain elapsed-time rendering — NOT a dose-timing
+    /// calculation: nothing derives a next-allowed dose from it.
+    static func relative(_ date: Date, now: Date = .now) -> String {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f.localizedString(for: date, relativeTo: now)
+    }
 }

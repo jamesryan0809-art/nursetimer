@@ -30,6 +30,14 @@ struct TaskDetailSheet: View {
                 VStack(spacing: 12) {
                     header
 
+                    if task.isPRN {
+                        PRNGuidanceView(lastGiven: task.lastCompletedAt,
+                                        frequencyText: task.prnFrequencyText, compact: false)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
+                    }
+
                     if needsRepair {
                         repairPrompt
                     } else {

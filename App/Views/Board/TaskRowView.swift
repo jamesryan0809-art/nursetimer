@@ -25,6 +25,9 @@ struct TaskRowView: View {
                 if let dosageLine {
                     Text(dosageLine).font(.subheadline).foregroundStyle(.secondary)
                 }
+                if task.isPRN {
+                    PRNGuidanceView(lastGiven: task.lastCompletedAt, frequencyText: task.prnFrequencyText)
+                }
                 if !task.notificationsEnabled { MutedBadge() }
             }
 

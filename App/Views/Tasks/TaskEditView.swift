@@ -40,6 +40,7 @@ struct TaskEditView: View {
     @State private var leadMinutes = 15
     @State private var repingMinutes = 3
     @State private var colorTag: TaskColorTag = .none
+    @State private var prnFrequency = ""
 
     private var settings: AppSettings { store.settings() }
 
@@ -99,6 +100,16 @@ struct TaskEditView: View {
             SchedulePickerView(draft: $draft, requireSelection: target.isRepair,
                                lastGiven: setLastGiven ? lastGiven : nil)
 
+            if draft.mode == .prn {
+                Section {
+                    TextField("e.g. every 4–6 hrs as needed", text: $prnFrequency, axis: .vertical)
+                } header: {
+                    Text("Frequency")
+                } footer: {
+                    Text("A note you'll read on the card — the app never enforces it, times it, or alerts from it. You decide when to give.")
+                }
+            }
+
             Section("Last given (optional)") {
                 Toggle("Set last-given time", isOn: $setLastGiven)
                 if setLastGiven { DatePicker("Last given", selection: $lastGiven) }
@@ -156,6 +167,7 @@ struct TaskEditView: View {
             if let lead = task.leadTimeMinutes { leadMinutes = lead }
             if let snz = task.snoozeMinutes { repingMinutes = snz }
             notificationsEnabled = task.notificationsEnabled
+            prnFrequency = task.prnFrequencyText
             if let last = task.lastCompletedAt { setLastGiven = true; lastGiven = last }
             colorTag = task.colorTag
             // Repair starts with an EMPTY, required schedule; edit prefills it.
@@ -179,24 +191,26 @@ struct TaskEditView: View {
         let lead = leadMinutes == settings.defaultLeadTimeMinutes ? nil : leadMinutes
         let snooze = repingMinutes == settings.defaultSnoozeMinutes ? nil : repingMinutes
         let lastGivenValue = setLastGiven ? lastGiven : nil
+        // Frequency guidance is only meaningful for PRN; clear it otherwise.
+        let freq = draft.mode == .prn ? prnFrequency.trimmingCharacters(in: .whitespacesAndNewlines) : ""
 
         switch target {
         case .add(let patient, _):
             store.addTask(to: patient, kind: kind, title: trimmedTitle, dosage: dose, route: rte,
                           schedule: schedule, lastGiven: lastGivenValue,
                           leadTimeMinutes: lead, snoozeMinutes: snooze, colorTag: colorTag,
-                          notificationsEnabled: notificationsEnabled)
+                          notificationsEnabled: notificationsEnabled, prnFrequencyText: freq)
         case .edit(let task):
             store.updateTask(task, kind: kind, title: trimmedTitle, dosage: dose, route: rte,
                              schedule: schedule, lastGiven: lastGivenValue,
                              leadTimeMinutes: lead, snoozeMinutes: snooze, colorTag: colorTag,
-                             notificationsEnabled: notificationsEnabled)
+                             notificationsEnabled: notificationsEnabled, prnFrequencyText: freq)
         case .repair(let task):
             // Preserve the other edits, then apply the repair with a fresh anchor.
             store.updateTask(task, kind: kind, title: trimmedTitle, dosage: dose, route: rte,
                              schedule: task.scheduleType, lastGiven: nil,
                              leadTimeMinutes: lead, snoozeMinutes: snooze, colorTag: colorTag,
-                             notificationsEnabled: notificationsEnabled)
+                             notificationsEnabled: notificationsEnabled, prnFrequencyText: freq)
             store.repair(task, with: schedule, anchor: lastGivenValue ?? .now)
         }
         dismiss()

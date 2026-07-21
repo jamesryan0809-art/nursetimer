@@ -86,6 +86,11 @@ public final class CareTask {
     /// like a paused task, so it fires no reminders. Property-level default `true` keeps this
     /// migration-safe for an existing store (existing tasks stay unmuted).
     public var notificationsEnabled: Bool = true
+    /// Free-text PRN frequency guidance (feedback item 3), e.g. "every 4–6 hrs as needed".
+    /// STRICTLY display-only: the app never parses it, computes next-allowed times, validates
+    /// against it, or alerts from it — that would be dose-timing calculation (spec §1.2 non-goal).
+    /// The nurse reads it alongside last-given and decides. Migration-safe default empty.
+    public var prnFrequencyText: String = ""
 
     public var patient: Patient?
 
@@ -109,6 +114,7 @@ public final class CareTask {
         updatedAt: Date = Date(),
         colorTagRaw: String = "none",
         notificationsEnabled: Bool = true,
+        prnFrequencyText: String = "",
         history: [TaskEvent] = []
     ) {
         self.id = id
@@ -127,6 +133,7 @@ public final class CareTask {
         self.updatedAt = updatedAt
         self.colorTagRaw = colorTagRaw
         self.notificationsEnabled = notificationsEnabled
+        self.prnFrequencyText = prnFrequencyText
         self.history = history
     }
 }
@@ -149,6 +156,10 @@ extension CareTask: SchedulableTask {
 extension CareTask {
     /// True iff the persisted schedule failed to decode and awaits manual repair.
     public var scheduleNeedsRepair: Bool { scheduleType.isNeedsRepair }
+
+    /// True iff this is an as-needed (PRN) task — drives the last-given + frequency display
+    /// (feedback item 3). Lets views branch without importing the Core `ScheduleType` enum.
+    public var isPRN: Bool { if case .prn = scheduleType { return true }; return false }
 
     /// Apply a nurse-selected repair: set a new valid schedule and establish a FRESH
     /// `nextDueAt` from `anchor` (last-given time, or now). Clears the repair state
