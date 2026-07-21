@@ -125,8 +125,32 @@ Custom notification interface with actions **Snooze** (dominant / first), **Give
 
 ## 6. iPhone App
 
-### 6.1 Navigation
-Bottom tab bar: **Board**, **Schedule**, **Log**. Settings via gear; Shift Review from the Board.
+### 6.1 Navigation **[nav]**
+Bottom tab bar: **Board**, **Schedule**, **Log**. Settings via the gear on the Board.
+(Shift Review is deferred to a later milestone.)
+
+**Navigation map (single entry point per screen; every push/sheet backs out to the Board):**
+- **Board** — the primary patient entry point.
+  - Tap a patient card → **Patient Detail** (push).
+  - Task-row swipe → lifecycle (Given/Done · Snooze · Skip Once · Pause · Edit). Edit → **Task form** (sheet).
+  - Tap a repair row → **Task form in repair mode** (sheet).
+  - Toolbar: **Add Patient** (sheet) · **Settings** (sheet) · **Show all** (clears a room filter).
+  - Footer / empty-state link: **Inactive Patients** (push) → reactivate / delete.
+- **Patient Detail** (working hub).
+  - **Add Medication** / **Add Task** → **Task form** (sheet), kind preset.
+  - Task rows: same lifecycle + Edit as the Board.
+  - Menu: **Edit Patient** (sheet) · **Deactivate** (pops to Board) · **Delete** (confirm, pops to Board).
+- **Notification routing** (§5.2 / §6.3):
+  - Task notification **tap** → Board filtered to the task's room.
+  - Task **action** (Given / Snooze / Skip Once) → performed in place, no navigation.
+  - **Repair warning** tap → that task's Task form (repair mode).
+  - **Repair digest** tap → Board (the repair section is pinned at the top).
+  - **Due / overdue digest** tap → Board filtered to the room (or the whole Board for cross-room / global digests).
+
+No dead ends: every sheet dismisses to its presenter; every push pops to the Board. The
+Task form is presented from exactly one place (a store-level request), so there are no
+duplicate routes to it with divergent state; active-patient detail is reached only via the
+Board (the Inactive list never routes to it).
 
 ### 6.2 Screens (Add/Edit Task form) **[interval-validation] [fail-loud-decode] [skip-redesign]**
 - **Board tab:** patients as cards sorted by soonest due; global "Up Next" strip; overdue pinned red at top. **Tasks needing repair (`.needsRepair`) are pinned above everything with an unmissable error treatment [fail-loud-decode]** (see §6.3).

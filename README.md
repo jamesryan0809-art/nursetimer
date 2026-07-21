@@ -239,6 +239,11 @@ Xcode 16+ must complete each item.
   one tap to the form); the patient's day laid out chronologically with inline projected times
   (reuses `PatientScheduleBuilder` / By-Patient rendering — no duplicated projection logic);
   Given/Done, Snooze, Skip Once, Pause, Edit on each row; Edit/Deactivate/Delete patient.
+- ⬜ **Item 4 (nav coherence):** notification tap → filtered Board; repair-warning tap →
+  repair form; repair digest → Board (repair section); due/overdue digest → filtered Board;
+  every sheet/push backs out to the Board with no dead ends. `PatientListView` repurposed to
+  inactive-only so active-patient detail is reached only via the Board (no duplicate route).
+  Nav map documented in BUILD_SPEC §6.1. Verify the graph end-to-end on device.
 
 ### Cross-cutting
 - ⬜ Dynamic Type scales legibly (rows readable at arm's length).
