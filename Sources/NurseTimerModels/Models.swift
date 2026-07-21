@@ -192,6 +192,9 @@ public final class AppSettings {
     public var appLockEnabled: Bool
     public var appLockTimeoutMinutes: Int
     public var shiftStartHour: Int?
+    /// Last-used Schedule tab mode ("byTime" / "byPatient" / "grid"). Property-level default
+    /// keeps this migration-safe for an existing store.
+    public var scheduleModeRaw: String = "byTime"
 
     public init(
         defaultLeadTimeMinutes: Int = 15,
@@ -199,7 +202,8 @@ public final class AppSettings {
         privacyModeNotifications: Bool = true,
         appLockEnabled: Bool = true,
         appLockTimeoutMinutes: Int = 5,
-        shiftStartHour: Int? = nil
+        shiftStartHour: Int? = nil,
+        scheduleModeRaw: String = "byTime"
     ) {
         self.defaultLeadTimeMinutes = defaultLeadTimeMinutes
         self.defaultSnoozeMinutes = defaultSnoozeMinutes
@@ -207,6 +211,7 @@ public final class AppSettings {
         self.appLockEnabled = appLockEnabled
         self.appLockTimeoutMinutes = appLockTimeoutMinutes
         self.shiftStartHour = shiftStartHour
+        self.scheduleModeRaw = scheduleModeRaw
     }
 
     /// Bridge to the Core scheduler parameters.

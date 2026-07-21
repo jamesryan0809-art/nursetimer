@@ -279,6 +279,17 @@ final class NurseStore {
         replan()
     }
 
+    /// Persist a UI preference (e.g., last-used Schedule mode) WITHOUT replanning —
+    /// preferences don't affect reminders.
+    func persistPreferences() {
+        do {
+            try context.save()
+        } catch {
+            AppLog.persistence.error("Could not save preferences: \(error.localizedDescription, privacy: .public)")
+            setBanner(.saveFailed)
+        }
+    }
+
     func replan() {
         let tasks = planningTasks()
         scheduler.privacyMode = settings().privacyModeNotifications

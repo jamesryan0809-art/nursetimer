@@ -6,7 +6,7 @@ import NurseTimerModels
 /// hour, with cluster highlighting. Read-only. Projections are computed live and are
 /// never persisted as task events; PRN / paused / completed-once / needsRepair are
 /// excluded by `ScheduleProjector`.
-enum ScheduleMode: String, CaseIterable { case byTime = "By Time", byPatient = "By Patient" }
+enum ScheduleMode: String, CaseIterable { case byTime = "By Time", byPatient = "By Patient", grid = "Grid" }
 
 /// A patient's projected day, for the By-Patient view. Identities are model-derived.
 /// (`PatientTaskLine` / `PatientTaskRow` are shared in PatientScheduleRow.swift.)
@@ -20,12 +20,18 @@ private struct PatientDay: Identifiable {
 struct ScheduleView: View {
     @Environment(NurseStore.self) private var store
     @Query private var tasks: [CareTask]
+    @Query private var patients: [Patient]
     @State private var mode: ScheduleMode = .byTime
 
+    private var settings: AppSettings { store.settings() }
+    private var activeTasks: [CareTask] { tasks.filter { $0.patient?.isActive == true } }
+    private var activePatients: [Patient] {
+        patients.filter { $0.isActive }
+            .sorted { $0.roomNumber.localizedStandardCompare($1.roomNumber) == .orderedAscending }
+    }
+
     private var occurrences: [ScheduleOccurrence] {
-        ScheduleProjector.occurrences(
-            for: tasks.filter { $0.patient?.isActive == true },
-            from: .now, calendar: .autoupdatingCurrent)
+        ScheduleProjector.occurrences(for: activeTasks, from: .now, calendar: .autoupdatingCurrent)
     }
 
     private var byHour: [(bucket: Date, label: String, items: [ScheduleOccurrence])] {
@@ -59,13 +65,18 @@ struct ScheduleView: View {
                 if occurrences.isEmpty {
                     ContentUnavailableView("Nothing scheduled", systemImage: "calendar",
                                            description: Text("Projected doses for the next 24 hours will appear here."))
-                } else if mode == .byTime {
-                    byTimeList
                 } else {
-                    byPatientList
+                    switch mode {
+                    case .byTime:    byTimeList
+                    case .byPatient: byPatientList
+                    case .grid:
+                        GridScheduleView(occurrences: occurrences, patients: activePatients,
+                                         tasks: activeTasks, now: .now, settings: settings)
+                    }
                 }
             }
             .navigationTitle("Schedule")
+            .navigationDestination(for: Patient.self) { PatientDetailView(patient: $0) }
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Picker("View", selection: $mode) {
@@ -73,6 +84,12 @@ struct ScheduleView: View {
                     }
                     .pickerStyle(.segmented)
                 }
+            }
+            // Persist the last-used mode in AppSettings (item 1).
+            .onAppear { mode = ScheduleMode(rawValue: settings.scheduleModeRaw) ?? .byTime }
+            .onChange(of: mode) { _, newMode in
+                settings.scheduleModeRaw = newMode.rawValue
+                store.persistPreferences()
             }
         }
     }

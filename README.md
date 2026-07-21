@@ -147,6 +147,14 @@ Xcode 16+ must complete each item.
   after every action; repair tasks pinned on top and open the repair flow.
 - ⬜ Schedule: projected interval + fixed occurrences; projections visually distinct from
   events; PRN/paused/completed-once/needsRepair excluded; nothing persisted as an event.
+- ⬜ **Schedule mode control (design pass):** segmented By Time / By Patient / Grid; last-used
+  mode persists across relaunch (`AppSettings.scheduleModeRaw`, saved without a replan).
+- ⬜ **Grid mode (design pass):** columns = active patients (room headers, abbreviated,
+  horizontal scroll past ~4–6); rows = 1-hour blocks; each occurrence a compact chip at its
+  time×room cell; status coloring matches Board (imminent occurrence tinted, later projections
+  lighter/neutral); "now" row highlighted and auto-scrolled into view on open; tap a chip →
+  patient detail. Confirm header truncation, horizontal + vertical scroll, and now-row anchor
+  on a real device with 6+ rooms.
 - ⬜ Log: reverse-chron events, per-patient filter, empty state (no export).
 - ⬜ Notifications: authorization request; pre/due/snooze delivery; deterministic ids;
   full replan on change + foreground; obsolete requests removed/replaced; budget respected.
