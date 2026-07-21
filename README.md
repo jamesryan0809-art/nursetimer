@@ -245,6 +245,13 @@ Xcode 16+ must complete each item.
   inactive-only so active-patient detail is reached only via the Board (no duplicate route).
   Nav map documented in BUILD_SPEC §6.1. Verify the graph end-to-end on device.
 
+### First-user design pass (grid / tags / time format)
+- ⬜ **Item 3 (locale time format):** all app-facing times go through `AppTime` (device
+  12h/24h). Confirm on a 12h-locale device: Schedule (By Time/By Patient/Grid), Log
+  timestamps, Board due labels, and the Add/Edit first-reminder preview all show AM/PM;
+  sort order stays chronological. (Core notification digest titles still use 24h `HH:mm` —
+  left per the no-Core-change constraint; revisit if inconsistency matters.)
+
 ### Cross-cutting
 - ⬜ Dynamic Type scales legibly (rows readable at arm's length).
 - ⬜ Light and dark appearance both correct (status colors only).

@@ -37,7 +37,7 @@ struct ScheduleView: View {
         }
         return groups.keys.sorted().map { key in
             // Identity is the hour-bucket Date (unique across dates); label is display only.
-            (bucket: key, label: key.formatted(.dateTime.hour().minute()),
+            (bucket: key, label: AppTime.short(key),
              items: groups[key]!.sorted { $0.date < $1.date })
         }
     }
@@ -118,7 +118,7 @@ private struct OccurrenceRow: View {
     let occ: ScheduleOccurrence
     var body: some View {
         HStack(spacing: 12) {
-            Text(occ.date.formatted(date: .omitted, time: .shortened))
+            Text(AppTime.short(occ.date))
                 .font(.subheadline.monospacedDigit())
                 .frame(width: 64, alignment: .leading)
             VStack(alignment: .leading, spacing: 1) {

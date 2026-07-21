@@ -55,7 +55,7 @@ private struct LogRow: View {
                 }
             }
             Spacer()
-            Text(event.timestamp.formatted(date: .abbreviated, time: .shortened))
+            Text(AppTime.dateTime(event.timestamp))
                 .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
         }
     }

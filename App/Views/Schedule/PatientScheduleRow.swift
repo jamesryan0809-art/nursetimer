@@ -28,16 +28,8 @@ enum PatientScheduleBuilder {
         }.sorted { ($0.times.first ?? .distantFuture) < ($1.times.first ?? .distantFuture) }
     }
 
-    /// "0900 · 1700 · 0100" (military, per §6.2 example).
-    static func timesText(_ times: [Date]) -> String {
-        times.map { hhmm.string(from: $0) }.joined(separator: " · ")
-    }
-    private static let hhmm: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "HHmm"
-        return f
-    }()
+    /// Device-locale short times joined ("9:00 AM · 5:00 PM · 1:00 AM"), item 3.
+    static func timesText(_ times: [Date]) -> String { AppTime.shortList(times) }
 }
 
 /// By-Patient row rendering (spec §6.2): title (+ dosage) and the day's times, styled as a

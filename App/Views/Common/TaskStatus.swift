@@ -48,7 +48,7 @@ enum DueText {
             return "\(minutes / 60)h \(minutes % 60)m overdue"
         }
         if minutes < 60 { return "in \(minutes) min" }
-        return due.formatted(date: .omitted, time: .shortened)
+        return AppTime.short(due)
     }
 }
 

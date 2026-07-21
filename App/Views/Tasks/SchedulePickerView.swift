@@ -64,7 +64,7 @@ struct SchedulePickerView: View {
     }
 
     private static func humanTime(_ date: Date, _ cal: Calendar) -> String {
-        let time = date.formatted(date: .omitted, time: .shortened)
+        let time = AppTime.short(date)
         if cal.isDateInToday(date) { return "today \(time)" }
         if cal.isDateInTomorrow(date) { return "tomorrow \(time)" }
         return date.formatted(.dateTime.weekday(.abbreviated).hour().minute())
