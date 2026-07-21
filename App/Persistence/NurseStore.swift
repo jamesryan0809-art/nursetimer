@@ -27,6 +27,10 @@ final class NurseStore {
     /// reduction banner: a one-time-per-change alert plus a persistent nav-bar indicator read
     /// this instead. Persistence-error banners are unaffected and keep their priority.
     var reduction = ReductionState()
+    /// The most recent successful action's confirmation (feedback micro-pass). Set only after a
+    /// persisted commit; the UI observes it to fire a haptic + brief toast. Read from
+    /// post-commit state so the "next due" string is the actual recomputed value.
+    var acknowledgment: ActionAck?
     /// Deep-link intent from a notification tap (root view observes it).
     var route: AppRoute?
     /// Centralized Add/Edit/Repair task presentation (root presents the sheet).
@@ -125,7 +129,12 @@ final class NurseStore {
         if SchedulingEngine.shouldAutoPauseAfterCompletion(schedule) { task.isPaused = true }
         task.explicitSnoozeAt = nil
         task.updatedAt = date
-        commit()
+        // Acknowledge only on persisted success; the string is read from the post-commit
+        // nextDueAt (feedback micro-pass). On save failure the error banner shows, no toast.
+        if commit() {
+            let verb = action == .given ? "Given" : "Done"
+            acknowledge(givenAckMessage(task, verb: verb), .success)
+        }
     }
 
     /// Re-ping chain re-anchors to now via `explicitSnoozeAt`; `nextDueAt` is unchanged
@@ -135,7 +144,11 @@ final class NurseStore {
         record(.snoozed, on: task, at: date)
         task.explicitSnoozeAt = date
         task.updatedAt = date
-        commit()
+        if commit() {
+            let snoozeMin = task.snoozeMinutes ?? settings().defaultSnoozeMinutes
+            let reping = date.addingTimeInterval(Double(snoozeMin) * 60)
+            acknowledge("Snoozed · re-ping \(AppTime.short(reping))", .light)
+        }
     }
 
     /// Skip Once: advance the schedule one occurrence without recording an
@@ -150,7 +163,9 @@ final class NurseStore {
         if SchedulingEngine.shouldAutoPauseAfterCompletion(schedule) { task.isPaused = true }
         task.explicitSnoozeAt = nil
         task.updatedAt = date
-        commit()
+        if commit() {
+            acknowledge(task.nextDueAt.map { "Skipped · next due \(AppTime.short($0))" } ?? "Skipped", .warning)
+        }
     }
 
     /// Pause: hold the task (no reminders until resumed), record a `.paused` event with
@@ -161,14 +176,20 @@ final class NurseStore {
         task.explicitSnoozeAt = nil
         record(.paused, on: task, at: date, note: source)
         task.updatedAt = date
-        commit()
+        if commit() { acknowledge("Paused — no reminders", .warning) }
     }
 
     /// Resume (and other non-event pause toggles).
     func setPaused(_ task: CareTask, _ paused: Bool) {
         task.isPaused = paused
         task.updatedAt = .now
-        commit()
+        if commit() {
+            if paused {
+                acknowledge("Paused — no reminders", .warning)
+            } else {
+                acknowledge(task.nextDueAt.map { "Resumed · next due \(AppTime.short($0))" } ?? "Resumed", .success)
+            }
+        }
     }
 
     /// Mute / unmute a task's reminders (feedback item 2). The planner excludes muted tasks
@@ -190,6 +211,21 @@ final class NurseStore {
         task.repair(with: schedule, anchor: anchor, calendar: calendar)
         scheduler.removeRepairWarning(taskID: task.id)
         commit()
+    }
+
+    // MARK: Action acknowledgment (feedback micro-pass)
+
+    private func acknowledge(_ message: String, _ style: ActionAck.Style) {
+        acknowledgment = ActionAck(message: message, style: style)
+    }
+
+    /// Confirmation string for Given/Done, read from post-commit state: the recomputed next-due
+    /// for recurring schedules; room (+ "last given updated" for PRN) when there's no next due.
+    private func givenAckMessage(_ task: CareTask, verb: String) -> String {
+        if let due = task.nextDueAt { return "\(verb) · next due \(AppTime.short(due))" }
+        let room = task.patient?.roomNumber ?? "?"
+        if task.isPRN { return "\(verb) · Rm \(room) · last given updated" }
+        return "\(verb) · Rm \(room)"
     }
 
     private func record(_ action: TaskAction, on task: CareTask, at date: Date, note: String? = nil) {
@@ -310,16 +346,18 @@ final class NurseStore {
     /// failure, roll back the in-memory mutation (restore last-saved state), surface the
     /// error, and DO NOT replan — existing scheduled notifications are left untouched, so
     /// they never reflect never-persisted state.
-    func commit() {
+    @discardableResult
+    func commit() -> Bool {
         do {
             try context.save()
         } catch {
             AppLog.persistence.error("Save failed: \(error.localizedDescription, privacy: .public)")
             context.rollback()          // discard the failed mutation
             setBanner(.saveFailed)
-            return                      // no replan; scheduler untouched
+            return false                // no replan; scheduler untouched; no success ack
         }
         replan()
+        return true
     }
 
     /// Persist a UI preference (e.g., last-used Schedule mode) WITHOUT replanning —

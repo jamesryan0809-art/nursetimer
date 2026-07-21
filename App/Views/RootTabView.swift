@@ -25,6 +25,9 @@ struct RootTabView: View {
                 .tabItem { Label("Log", systemImage: "list.bullet.rectangle") }
                 .tag(2)
         }
+        // Action acknowledgment: haptic + brief bottom toast on every successful action,
+        // across all tabs and surfaces (feedback micro-pass).
+        .actionAcknowledgments()
         .safeAreaInset(edge: .top) { BannerView(banner: $store.banner) }
         // Reduction is non-blocking now (feedback item 2): a dismissible alert on app open and
         // when the reduction first becomes true or changes; a persistent nav-bar indicator

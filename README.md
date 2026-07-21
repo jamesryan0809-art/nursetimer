@@ -155,6 +155,13 @@ Xcode 16+ must complete each item.
   lighter/neutral); "now" row highlighted and auto-scrolled into view on open; tap a chip →
   task detail sheet. Confirm header truncation, horizontal + vertical scroll, and now-row anchor
   on a real device with 6+ rooms.
+- ⬜ **Action acknowledgment (feedback micro-pass):** every successful Given/Skip/Snooze/
+  Pause/Resume fires a haptic + a brief bottom toast ("Given · next due 5:07 PM", etc.) read
+  from post-commit state; toast auto-dismisses ~2s, never covers the nav bar or action buttons,
+  and is static under Reduce Motion. Confirm NO toast on a save failure (error banner shows
+  instead), and that the string matches the recomputed next-due. **Haptics are device-only — the
+  simulator won't vibrate, so absence of vibration in the simulator is expected, not a bug;
+  verify haptics on a physical device.**
 - ⬜ **Tap-to-act task detail (design pass, feedback item 1):** tapping any task row (Board,
   patient detail, Schedule By-Time/By-Patient rows, Grid chip) opens a sheet with large
   Given/Done · Snooze · Skip Once · Pause (confirmed) · Edit buttons; paused → Resume;

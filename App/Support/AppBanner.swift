@@ -28,6 +28,19 @@ struct AppBanner: Identifiable, Equatable {
     }
 }
 
+/// An immediate, unmissable confirmation for a successful task action (feedback micro-pass):
+/// a haptic + a brief auto-dismissing toast. Produced by the store only after a persisted
+/// commit, so the message reflects real state. The unique `id` makes repeated identical actions
+/// (e.g. Given twice) re-trigger the toast/haptic.
+struct ActionAck: Identifiable, Equatable {
+    /// Maps to a standard `UIFeedbackGenerator`: success/warning → notification haptics,
+    /// light → a light impact.
+    enum Style { case success, warning, light }
+    let id = UUID()
+    let message: String
+    let style: Style
+}
+
 /// Non-blocking reminder-reduction indicator (feedback item 2). Reminders being reduced to fit
 /// the OS budget is informational, not an error — so it no longer occupies the top banner
 /// (which obstructed controls). This state drives a one-time-per-change alert and a persistent,
