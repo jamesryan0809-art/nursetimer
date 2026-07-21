@@ -18,6 +18,9 @@ struct ScheduleOccurrence: Identifiable {
     let isMedication: Bool
     /// Raw per-med color-tag name, carried through so Schedule/Grid can render the tag channel.
     let colorTagRaw: String
+    /// True when the task's reminders are muted (feedback item 2) — the schedule still shows
+    /// the occurrence, marked, because silence must stay visible.
+    let muted: Bool
 }
 
 /// App-layer projection of the next 24 hours across all tasks, built on Core types
@@ -76,6 +79,6 @@ enum ScheduleProjector {
             date: date, taskID: task.id, patientID: task.patient?.id,
             room: task.patient?.roomNumber ?? "", firstName: task.patient?.firstName,
             title: task.title, dosage: task.dosage, isMedication: task.kind == .medication,
-            colorTagRaw: task.colorTagRaw)
+            colorTagRaw: task.colorTagRaw, muted: !task.notificationsEnabled)
     }
 }

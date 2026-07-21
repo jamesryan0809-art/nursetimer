@@ -126,7 +126,7 @@ Xcode 16+ must complete each item.
   in App/Watch/Widget plists (installer required it). Confirm all three targets install.
 
 ### Core (already verified where noted)
-- ✅ Swift XCTest suite: **58 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
+- ✅ Swift XCTest suite: **81 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
 - ⬜ SwiftData model-container initialization (`PersistenceController.makeContainer`).
 - ⬜ Store file is `FileProtectionType.complete` at rest.
 - ⬜ CRUD persistence (patients, tasks, events, settings) survives relaunch.
@@ -160,6 +160,14 @@ Xcode 16+ must complete each item.
   Given/Done · Snooze · Skip Once · Pause (confirmed) · Edit buttons; paused → Resume;
   needsRepair → Fix schedule. Confirm the swipe actions still work as shortcuts, that Edit
   presents cleanly over the detail sheet, and that each action dismisses and refreshes the row.
+- ⬜ **Reminders promoted + per-task mute (design pass, feedback item 2):** Add/Edit form shows
+  a "Reminders" section at the TOP (lead time, re-ping interval prefilled from Settings
+  defaults, Notifications on/off); Advanced section is gone. `CareTask.notificationsEnabled` is
+  **migration-safe (property-level default ON)** on an existing store. A muted task shows the
+  `bell.slash` "Reminders off" indicator on Board / patient detail / Schedule / Grid and fires
+  NO notifications (Core exclusion, mirrors paused — covered by `NotificationPlannerTests`);
+  the task sheet shows the muted banner with one-tap re-enable. Confirm a muted task still
+  appears everywhere (silence stays visible) and that unmuting replans and restores reminders.
 - ⬜ **Per-med color tag (design pass):** Add/Edit form swatch picker (8-color palette + None)
   persists on `CareTask.colorTagRaw`; migration-safe default "none" on an existing store.
   Renders as a leading channel — left-edge bar on Board / patient-detail / Schedule rows, dot on

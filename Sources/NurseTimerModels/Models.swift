@@ -81,6 +81,11 @@ public final class CareTask {
     /// A display-only channel SEPARATE from status color (spec §7); NOT a scheduling input.
     /// Property-level default keeps this migration-safe for an existing store.
     public var colorTagRaw: String = "none"
+    /// Per-task notifications switch (feedback item 2). When false the task is MUTED — it
+    /// keeps its schedule and stays visible everywhere, but the planner excludes it exactly
+    /// like a paused task, so it fires no reminders. Property-level default `true` keeps this
+    /// migration-safe for an existing store (existing tasks stay unmuted).
+    public var notificationsEnabled: Bool = true
 
     public var patient: Patient?
 
@@ -103,6 +108,7 @@ public final class CareTask {
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
         colorTagRaw: String = "none",
+        notificationsEnabled: Bool = true,
         history: [TaskEvent] = []
     ) {
         self.id = id
@@ -120,6 +126,7 @@ public final class CareTask {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.colorTagRaw = colorTagRaw
+        self.notificationsEnabled = notificationsEnabled
         self.history = history
     }
 }

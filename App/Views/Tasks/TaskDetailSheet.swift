@@ -84,6 +84,8 @@ struct TaskDetailSheet: View {
 
     @ViewBuilder
     private var actions: some View {
+        if !task.notificationsEnabled { mutedBanner }
+
         Button {
             store.markGivenOrDone(task); dismiss()
         } label: {
@@ -130,6 +132,24 @@ struct TaskDetailSheet: View {
             Label("Edit", systemImage: "pencil").frame(maxWidth: .infinity)
         }
         .buttonStyle(.bordered)
+    }
+
+    /// "Reminders off" shown prominently with a one-tap re-enable (feedback item 2). Silence
+    /// must always be visible and easy to undo.
+    private var mutedBanner: some View {
+        VStack(spacing: 8) {
+            Label("Reminders off — this task won't notify you.", systemImage: "bell.slash.fill")
+                .font(.subheadline.bold())
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button {
+                store.setNotificationsEnabled(task, true)
+            } label: {
+                Label("Turn on reminders", systemImage: "bell").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding()
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var repairPrompt: some View {

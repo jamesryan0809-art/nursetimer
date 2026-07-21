@@ -159,6 +159,7 @@ private struct OccurrenceRow: View {
                 if let dosage = occ.dosage, occ.isMedication {
                     Text(dosage).font(.caption).foregroundStyle(.secondary)
                 }
+                if occ.muted { MutedBadge().italic(false) }
             }
             Spacer()
         }

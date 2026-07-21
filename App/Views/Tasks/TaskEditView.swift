@@ -34,11 +34,14 @@ struct TaskEditView: View {
     @State private var draft = ScheduleDraft()
     @State private var setLastGiven = false
     @State private var lastGiven = Date.now
-    @State private var useLeadOverride = false
-    @State private var leadOverride = 15
-    @State private var useSnoozeOverride = false
-    @State private var snoozeOverride = 3
+    // Reminders (feedback item 2) — prefilled from the Settings defaults; a changed value
+    // becomes a per-task override, an unchanged one keeps following the default.
+    @State private var notificationsEnabled = true
+    @State private var leadMinutes = 15
+    @State private var repingMinutes = 3
     @State private var colorTag: TaskColorTag = .none
+
+    private var settings: AppSettings { store.settings() }
 
     private var canSave: Bool {
         !title.trimmingCharacters(in: .whitespaces).isEmpty
@@ -55,6 +58,8 @@ struct TaskEditView: View {
                         .foregroundStyle(.red)
                 }
             }
+
+            remindersSection
 
             Section("Type") {
                 Picker("Type", selection: $kind) {
@@ -98,15 +103,6 @@ struct TaskEditView: View {
                 Toggle("Set last-given time", isOn: $setLastGiven)
                 if setLastGiven { DatePicker("Last given", selection: $lastGiven) }
             }
-
-            Section {
-                DisclosureGroup("Advanced") {
-                    Toggle("Custom lead time", isOn: $useLeadOverride)
-                    if useLeadOverride { Stepper("Lead: \(leadOverride) min", value: $leadOverride, in: 5...60, step: 5) }
-                    Toggle("Custom snooze", isOn: $useSnoozeOverride)
-                    if useSnoozeOverride { Stepper("Snooze: \(snoozeOverride) min", value: $snoozeOverride, in: 1...15) }
-                }
-            }
         }
         .navigationTitle(navTitle)
         .toolbar {
@@ -114,6 +110,27 @@ struct TaskEditView: View {
             ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).disabled(!canSave) }
         }
         .onAppear(perform: load)
+    }
+
+    /// Reminders — promoted to the TOP of the form (feedback item 2). Lead time and re-ping
+    /// interval are the per-task overrides, prefilled from the Settings defaults; the
+    /// Notifications toggle mutes the task without deleting it.
+    private var remindersSection: some View {
+        Section {
+            Toggle("Notifications", isOn: $notificationsEnabled)
+            if notificationsEnabled {
+                Stepper("Notify me \(leadMinutes) min before due",
+                        value: $leadMinutes, in: 5...60, step: 5)
+                Stepper("If I don't respond, re-ping every \(repingMinutes) min",
+                        value: $repingMinutes, in: 1...15)
+            }
+        } header: {
+            Text("Reminders")
+        } footer: {
+            Text(notificationsEnabled
+                 ? "Defaults come from Settings; changing a value here overrides it for this task only."
+                 : "Muted — this task stays on your lists but won't notify you.")
+        }
     }
 
     private var navTitle: String {
@@ -125,6 +142,9 @@ struct TaskEditView: View {
     }
 
     private func load() {
+        // Prefill reminder controls from the global defaults; an existing task's overrides win.
+        leadMinutes = settings.defaultLeadTimeMinutes
+        repingMinutes = settings.defaultSnoozeMinutes
         switch target {
         case .add(_, let presetKind):
             kind = presetKind   // "Add Medication" / "Add Task" preset the type
@@ -133,8 +153,9 @@ struct TaskEditView: View {
             title = task.title
             dosage = task.dosage ?? ""
             route = task.route ?? ""
-            if let lead = task.leadTimeMinutes { useLeadOverride = true; leadOverride = lead }
-            if let snz = task.snoozeMinutes { useSnoozeOverride = true; snoozeOverride = snz }
+            if let lead = task.leadTimeMinutes { leadMinutes = lead }
+            if let snz = task.snoozeMinutes { repingMinutes = snz }
+            notificationsEnabled = task.notificationsEnabled
             if let last = task.lastCompletedAt { setLastGiven = true; lastGiven = last }
             colorTag = task.colorTag
             // Repair starts with an EMPTY, required schedule; edit prefills it.
@@ -153,24 +174,29 @@ struct TaskEditView: View {
         let trimmedTitle = title.trimmingCharacters(in: .whitespaces)
         let dose = kind == .medication ? dosage.nilIfBlank : nil
         let rte = kind == .medication ? route.nilIfBlank : nil
-        let lead = useLeadOverride ? leadOverride : nil
-        let snooze = useSnoozeOverride ? snoozeOverride : nil
+        // Store an override only when it differs from the current default, so a value left at
+        // the default keeps tracking future Settings changes.
+        let lead = leadMinutes == settings.defaultLeadTimeMinutes ? nil : leadMinutes
+        let snooze = repingMinutes == settings.defaultSnoozeMinutes ? nil : repingMinutes
         let lastGivenValue = setLastGiven ? lastGiven : nil
 
         switch target {
         case .add(let patient, _):
             store.addTask(to: patient, kind: kind, title: trimmedTitle, dosage: dose, route: rte,
                           schedule: schedule, lastGiven: lastGivenValue,
-                          leadTimeMinutes: lead, snoozeMinutes: snooze, colorTag: colorTag)
+                          leadTimeMinutes: lead, snoozeMinutes: snooze, colorTag: colorTag,
+                          notificationsEnabled: notificationsEnabled)
         case .edit(let task):
             store.updateTask(task, kind: kind, title: trimmedTitle, dosage: dose, route: rte,
                              schedule: schedule, lastGiven: lastGivenValue,
-                             leadTimeMinutes: lead, snoozeMinutes: snooze, colorTag: colorTag)
+                             leadTimeMinutes: lead, snoozeMinutes: snooze, colorTag: colorTag,
+                             notificationsEnabled: notificationsEnabled)
         case .repair(let task):
             // Preserve the other edits, then apply the repair with a fresh anchor.
             store.updateTask(task, kind: kind, title: trimmedTitle, dosage: dose, route: rte,
                              schedule: task.scheduleType, lastGiven: nil,
-                             leadTimeMinutes: lead, snoozeMinutes: snooze, colorTag: colorTag)
+                             leadTimeMinutes: lead, snoozeMinutes: snooze, colorTag: colorTag,
+                             notificationsEnabled: notificationsEnabled)
             store.repair(task, with: schedule, anchor: lastGivenValue ?? .now)
         }
         dismiss()

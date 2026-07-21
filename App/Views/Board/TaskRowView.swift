@@ -25,6 +25,7 @@ struct TaskRowView: View {
                 if let dosageLine {
                     Text(dosageLine).font(.subheadline).foregroundStyle(.secondary)
                 }
+                if !task.notificationsEnabled { MutedBadge() }
             }
 
             Spacer(minLength: 8)

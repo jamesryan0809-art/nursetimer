@@ -168,6 +168,24 @@ final class NotificationPlannerTests: XCTestCase {
         XCTAssertTrue(plan.notifications.isEmpty)
     }
 
+    /// Feedback item 2: a muted task is excluded from planning exactly like a paused one —
+    /// no notifications of any kind — while an otherwise-identical unmuted task schedules.
+    func test_mutedTask_producesNoNotifications() {
+        let cal = utcCalendar()
+        let now = dt(cal, 2026, 7, 19, 16, 0)
+        let due = dt(cal, 2026, 7, 19, 16, 30)
+        let muted = NotificationPlanner.plan(tasks: [
+            TaskSnapshot(id: taskID1, scheduleType: everyHr(4), nextDueAt: due, notificationsEnabled: false),
+        ], settings: .default, now: now, calendar: cal)
+        XCTAssertTrue(muted.notifications.isEmpty)
+
+        // Control: the same task with notifications ON does schedule.
+        let live = NotificationPlanner.plan(tasks: [
+            TaskSnapshot(id: taskID1, scheduleType: everyHr(4), nextDueAt: due, notificationsEnabled: true),
+        ], settings: .default, now: now, calendar: cal)
+        XCTAssertFalse(live.notifications.isEmpty)
+    }
+
     func test_planIsSortedByFireDate() {
         let cal = utcCalendar()
         let now = dt(cal, 2026, 7, 19, 8, 0)

@@ -9,6 +9,7 @@ struct PatientTaskLine: Identifiable {
     let isMedication: Bool
     let times: [Date]
     let colorTagRaw: String
+    let muted: Bool
 
     var colorTag: TaskColorTag { TaskColorTag(rawValue: colorTagRaw) ?? .none }
 }
@@ -28,7 +29,7 @@ enum PatientScheduleBuilder {
             let f = occs[0]
             return PatientTaskLine(id: f.taskID, title: f.title, dosage: f.dosage,
                                    isMedication: f.isMedication, times: occs.map { $0.date }.sorted(),
-                                   colorTagRaw: f.colorTagRaw)
+                                   colorTagRaw: f.colorTagRaw, muted: f.muted)
         }.sorted { ($0.times.first ?? .distantFuture) < ($1.times.first ?? .distantFuture) }
     }
 
@@ -48,6 +49,7 @@ struct PatientTaskRow: View {
                     .font(.subheadline)
                 Text(PatientScheduleBuilder.timesText(line.times))
                     .font(.caption.monospacedDigit())
+                if line.muted { MutedBadge().italic(false) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

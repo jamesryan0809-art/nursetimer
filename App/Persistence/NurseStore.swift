@@ -158,6 +158,14 @@ final class NurseStore {
         commit()
     }
 
+    /// Mute / unmute a task's reminders (feedback item 2). The planner excludes muted tasks
+    /// like paused ones; a commit replans so pending reminders are dropped/restored at once.
+    func setNotificationsEnabled(_ task: CareTask, _ enabled: Bool) {
+        task.notificationsEnabled = enabled
+        task.updatedAt = .now
+        commit()
+    }
+
     func acknowledgeMissed(_ task: CareTask, at date: Date = .now) {
         record(.missedAcknowledged, on: task, at: date)
         commit()
@@ -218,10 +226,10 @@ final class NurseStore {
     @discardableResult
     func addTask(to patient: Patient, kind: TaskKind, title: String, dosage: String?, route: String?,
                  schedule: ScheduleType, lastGiven: Date?, leadTimeMinutes: Int?, snoozeMinutes: Int?,
-                 colorTag: TaskColorTag = .none) -> CareTask {
+                 colorTag: TaskColorTag = .none, notificationsEnabled: Bool = true) -> CareTask {
         let task = CareTask(kind: kind, title: title, dosage: dosage, route: route,
                             scheduleType: schedule, leadTimeMinutes: leadTimeMinutes, snoozeMinutes: snoozeMinutes,
-                            colorTagRaw: colorTag.rawValue)
+                            colorTagRaw: colorTag.rawValue, notificationsEnabled: notificationsEnabled)
         task.patient = patient
         task.lastCompletedAt = lastGiven
         task.nextDueAt = SchedulingEngine.firstDue(for: schedule, anchor: lastGiven ?? .now, calendar: calendar)
@@ -239,7 +247,7 @@ final class NurseStore {
     ///  - schedule, anchor, lastCompletedAt, and nextDueAt commit atomically (item 7).
     func updateTask(_ task: CareTask, kind: TaskKind, title: String, dosage: String?, route: String?,
                     schedule: ScheduleType, lastGiven: Date?, leadTimeMinutes: Int?, snoozeMinutes: Int?,
-                    colorTag: TaskColorTag = .none) {
+                    colorTag: TaskColorTag = .none, notificationsEnabled: Bool = true) {
         let priorLastGiven = task.lastCompletedAt
         let scheduleChanged = task.scheduleType != schedule
         let anchorChanged = lastGiven != priorLastGiven
@@ -250,7 +258,8 @@ final class NurseStore {
         task.route = route
         task.leadTimeMinutes = leadTimeMinutes
         task.snoozeMinutes = snoozeMinutes
-        task.colorTagRaw = colorTag.rawValue      // display-only tag channel (item 2)
+        task.colorTagRaw = colorTag.rawValue      // display-only tag channel (color-tag pass)
+        task.notificationsEnabled = notificationsEnabled   // muted-task switch (feedback item 2)
         task.scheduleType = schedule
         task.lastCompletedAt = lastGiven          // always reflect the form (submit or clear)
 

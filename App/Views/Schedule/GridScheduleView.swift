@@ -133,11 +133,13 @@ private struct ChipView: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            // Tag channel (item 2) — a leading dot, SEPARATE from the status-driven background tint.
+            // Tag channel (color-tag pass) — a leading dot, SEPARATE from the status-driven tint.
             TagDot(tag: tag, diameter: 6)
             Text(occ.title)
                 .font(.caption2).lineLimit(1).truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            // Muted marker (feedback item 2) — silence stays visible even in the compact grid.
+            if occ.muted { MutedBadge(showsLabel: false) }
         }
         .padding(.horizontal, 5).padding(.vertical, 3)
         .background(tint.opacity(imminent ? 0.22 : 0.10), in: RoundedRectangle(cornerRadius: 5))

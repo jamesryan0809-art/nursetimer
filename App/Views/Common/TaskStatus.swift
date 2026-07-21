@@ -56,3 +56,27 @@ extension Patient {
     /// "Rm 412B · Maria" (spec §3.1).
     var display: String { "Rm \(roomNumber)" + (firstName.map { " · \($0)" } ?? "") }
 }
+
+/// "Muted is loud" (feedback item 2): a muted task must never be silently silent. This badge
+/// is deliberately MONOCHROME (bold icon + label on a neutral capsule) so it stays unmissable
+/// without borrowing a status hue — color remains status-only (spec §7).
+struct MutedBadge: View {
+    /// `false` shows just the bell-slash icon, for tight spots like Grid chips.
+    var showsLabel = true
+
+    var body: some View {
+        if showsLabel {
+            Label("Reminders off", systemImage: "bell.slash.fill")
+                .font(.caption2.bold())
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(.quaternary, in: Capsule())
+                .foregroundStyle(.primary)
+                .accessibilityLabel("Reminders off")
+        } else {
+            Image(systemName: "bell.slash.fill")
+                .font(.caption2)
+                .foregroundStyle(.primary)
+                .accessibilityLabel("Reminders off")
+        }
+    }
+}

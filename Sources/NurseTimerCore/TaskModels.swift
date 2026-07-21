@@ -137,9 +137,20 @@ public protocol SchedulableTask {
     var snoozeMinutes: Int? { get }
     /// "Held" — excluded from scheduling without being deleted.
     var isPaused: Bool { get }
+    /// Per-task notifications switch. A muted task (`false`) is excluded from planning
+    /// EXACTLY like a paused one — it keeps its schedule and stays visible, it just fires
+    /// no reminders. Default `true` (see extension) so existing conformers/tests are
+    /// unaffected. This is not a scheduling change: the planner drops muted tasks the same
+    /// way it drops paused tasks.
+    var notificationsEnabled: Bool { get }
     /// If the nurse explicitly hit Snooze, the moment they did so. The re-ping
     /// chain re-anchors here instead of at `nextDueAt`. Nil normally.
     var explicitSnoozeAt: Date? { get }
+}
+
+public extension SchedulableTask {
+    /// Default: notifications on. Conformers that predate the switch keep firing.
+    var notificationsEnabled: Bool { true }
 }
 
 /// Concrete, immutable `SchedulableTask` for the engine, planner, and tests.
@@ -153,6 +164,7 @@ public struct TaskSnapshot: SchedulableTask, Equatable, Sendable {
     public let leadTimeMinutes: Int?
     public let snoozeMinutes: Int?
     public let isPaused: Bool
+    public let notificationsEnabled: Bool
     public let explicitSnoozeAt: Date?
 
     public init(
@@ -165,6 +177,7 @@ public struct TaskSnapshot: SchedulableTask, Equatable, Sendable {
         leadTimeMinutes: Int? = nil,
         snoozeMinutes: Int? = nil,
         isPaused: Bool = false,
+        notificationsEnabled: Bool = true,
         explicitSnoozeAt: Date? = nil
     ) {
         self.id = id
@@ -176,6 +189,7 @@ public struct TaskSnapshot: SchedulableTask, Equatable, Sendable {
         self.leadTimeMinutes = leadTimeMinutes
         self.snoozeMinutes = snoozeMinutes
         self.isPaused = isPaused
+        self.notificationsEnabled = notificationsEnabled
         self.explicitSnoozeAt = explicitSnoozeAt
     }
 }
