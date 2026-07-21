@@ -116,6 +116,14 @@ Xcode 16+ must complete each item.
 - ⬜ Widget extension compiles.
 - ⬜ Signing teams selected locally; bundle IDs / entitlements / companion config valid.
 - ⬜ App icon renders on iOS, Watch, and Widget (generated from `Icon/AppIcon.svg`).
+- ⬜ **Watch embedding (post-build-day):** iOS install previously failed with "Could not get
+  contents of Watch directory" (embed temporarily disabled). Re-enabled with `embed: true` +
+  `codeSign: true` on iOS→Watch and Watch→Widget. Confirm on Mac that `make project` builds
+  and installs the iOS app WITH the watch app in `.app/Watch/` and the widget in the watch
+  app's `PlugIns/`; if XcodeGen's auto "Embed Watch Content" phase still misfires, inspect its
+  destination (`$(CONTENTS_FOLDER_PATH)/Watch`).
+- ⬜ **Info.plist keys (post-build-day):** `CFBundleExecutable = $(EXECUTABLE_NAME)` now present
+  in App/Watch/Widget plists (installer required it). Confirm all three targets install.
 
 ### Core (already verified where noted)
 - ✅ Swift XCTest suite: **58 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.

@@ -338,7 +338,6 @@ public enum NotificationPlanner {
         var overdue = entries.filter { $0.category == .overdue }.map { Unit(ids: [$0.id], window: $0.windowStart) }
 
         var wasTrimmed = false
-        var coalesced = false
 
         func chainKept(_ id: UUID) -> Int { min(byID[id]!.chain.count, depth) }
         func unitFootprint(_ u: Unit, _ category: Category) -> Int {
@@ -363,10 +362,12 @@ public enum NotificationPlanner {
         }
         // 2. Shorten chains uniformly, down to the five-ping floor.
         while total() > cap, depth > floor { depth -= 1; wasTrimmed = true }
-        // 3. Coalesce upcoming tasks (room → cross-room → global).
-        while total() > cap, mergeOnce(&upcoming, byID: byID) { coalesced = true }
+        // 3. Coalesce upcoming tasks (room → cross-room → global). The coalescing signal
+        //    is carried by `groupCount` (below) → planWasCoalesced / reduction.digestsFormed;
+        //    no separate bool is needed.
+        while total() > cap, mergeOnce(&upcoming, byID: byID) {}
         // 4. Coalesce overdue tasks (room → cross-room → global).
-        while total() > cap, mergeOnce(&overdue, byID: byID) { coalesced = true }
+        while total() > cap, mergeOnce(&overdue, byID: byID) {}
 
         // Assemble.
         var out: [PlannedNotification] = []

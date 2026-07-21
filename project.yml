@@ -53,8 +53,14 @@ targets:
         product: NurseTimerCore
       - package: NurseTimer
         product: NurseTimerModels
+      # Embed the watchOS companion app into the iOS bundle. XcodeGen recognizes a
+      # watchOS-app dependency and creates the "Embed Watch Content" copy phase
+      # ($(CONTENTS_FOLDER_PATH)/Watch); codeSign re-signs the copied app (required, and
+      # the missing signing was the likely cause of the "Could not get contents of Watch
+      # directory" install failure). Verify on Mac.
       - target: NurseTimerWatch
-        embed: false
+        embed: true
+        codeSign: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nursetimer.app
@@ -74,8 +80,10 @@ targets:
     dependencies:
       - package: NurseTimer
         product: NurseTimerCore
+      # Nest the WidgetKit extension inside the watch app (PlugIns), code-signed on copy.
       - target: NurseTimerWidget
         embed: true
+        codeSign: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nursetimer.app.watch
