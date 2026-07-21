@@ -60,6 +60,8 @@ struct TaskEditView: View {
                 }
             }
 
+            // Form order (feedback item 4): Reminders → name (type + title) → schedule →
+            // PRN frequency (when applicable) → last given → Details (dosage, route) → color tag.
             remindersSection
 
             Section("Type") {
@@ -82,21 +84,6 @@ struct TaskEditView: View {
                 }
             }
 
-            if kind == .medication {
-                Section("Medication") {
-                    TextField("Dosage (e.g. 25 mg PO)", text: $dosage)
-                    TextField("Route (optional)", text: $route)
-                }
-            }
-
-            Section {
-                ColorTagPicker(selection: $colorTag)
-            } header: {
-                Text("Color tag")
-            } footer: {
-                Text("A visual label to group meds at a glance. Separate from the red/orange/green urgency colors — it never changes how urgent a task looks.")
-            }
-
             SchedulePickerView(draft: $draft, requireSelection: target.isRepair,
                                lastGiven: setLastGiven ? lastGiven : nil)
 
@@ -113,6 +100,21 @@ struct TaskEditView: View {
             Section("Last given (optional)") {
                 Toggle("Set last-given time", isOn: $setLastGiven)
                 if setLastGiven { DatePicker("Last given", selection: $lastGiven) }
+            }
+
+            if kind == .medication {
+                Section("Details") {
+                    TextField("Dosage (e.g. 25 mg PO)", text: $dosage)
+                    TextField("Route (optional)", text: $route)
+                }
+            }
+
+            Section {
+                ColorTagPicker(selection: $colorTag)
+            } header: {
+                Text("Color tag")
+            } footer: {
+                Text("A visual label to group meds at a glance. Separate from the red/orange/green urgency colors — it never changes how urgent a task looks.")
             }
         }
         .navigationTitle(navTitle)

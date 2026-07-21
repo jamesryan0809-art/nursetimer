@@ -174,6 +174,10 @@ Xcode 16+ must complete each item.
   `CareTask.prnFrequencyText` is **migration-safe (default empty)**. CONFIRM the frequency is
   purely display — nothing parses it, computes a next-allowed dose, validates, or alerts
   (§1.2 non-goal) — and that the elapsed time updates without reopening the view.
+- ⬜ **Task form reorder (design pass, feedback item 4):** section order is Reminders → type →
+  title → schedule (with consequence preview) → PRN frequency (PRN only) → last given → Details
+  (dosage, route — med only, at the bottom) → color tag. Confirm the flow reads top-to-bottom
+  and that Details/color-tag still save correctly from their new positions.
 - ⬜ **Per-med color tag (design pass):** Add/Edit form swatch picker (8-color palette + None)
   persists on `CareTask.colorTagRaw`; migration-safe default "none" on an existing store.
   Renders as a leading channel — left-edge bar on Board / patient-detail / Schedule rows, dot on
