@@ -178,6 +178,11 @@ Xcode 16+ must complete each item.
   title → schedule (with consequence preview) → PRN frequency (PRN only) → last given → Details
   (dosage, route — med only, at the bottom) → color tag. Confirm the flow reads top-to-bottom
   and that Details/color-tag still save correctly from their new positions.
+- ⬜ **Overdue persists in Schedule (feedback pass 3, item 4):** an overdue (uncompleted,
+  unskipped) occurrence stays visible in all three modes — a pinned red "Overdue" section at
+  top of By-Time, red (non-dimmed) rows in By-Patient, red cells in Grid (above the now row,
+  lookback clamped to 24h in Grid) — until given/skipped. Confirm it does NOT age out or render
+  struck/past, and that marking it given/skipped removes it. Completed rendering unchanged.
 - ⬜ **Graduated redaction (feedback pass 3, item 3):** with privacy mode ON, notifications
   read "[Medication|Care] due · Rm X" and digests "3 medications overdue · Rm 422" — kind
   included, name/dosage/detail still excluded. Confirm pre/snooze/due/digests all follow the

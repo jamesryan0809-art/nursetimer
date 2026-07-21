@@ -10,6 +10,9 @@ struct PatientTaskLine: Identifiable {
     let times: [Date]
     let colorTagRaw: String
     let muted: Bool
+    /// True when this task has an unresolved overdue occurrence (feedback item 4) — the row is
+    /// marked red and not dimmed as a projection.
+    let isOverdue: Bool
 
     var colorTag: TaskColorTag { TaskColorTag(rawValue: colorTagRaw) ?? .none }
 }
@@ -29,7 +32,8 @@ enum PatientScheduleBuilder {
             let f = occs[0]
             return PatientTaskLine(id: f.taskID, title: f.title, dosage: f.dosage,
                                    isMedication: f.isMedication, times: occs.map { $0.date }.sorted(),
-                                   colorTagRaw: f.colorTagRaw, muted: f.muted)
+                                   colorTagRaw: f.colorTagRaw, muted: f.muted,
+                                   isOverdue: occs.contains { $0.isOverdue })
         }.sorted { ($0.times.first ?? .distantFuture) < ($1.times.first ?? .distantFuture) }
     }
 
@@ -45,15 +49,21 @@ struct PatientTaskRow: View {
         HStack(spacing: 12) {
             TagBar(tag: line.colorTag, height: 30)
             VStack(alignment: .leading, spacing: 1) {
-                Text(line.title + (line.isMedication ? (line.dosage.map { " · \($0)" } ?? "") : ""))
-                    .font(.subheadline)
+                HStack(spacing: 6) {
+                    if line.isOverdue {
+                        Image(systemName: "exclamationmark.circle.fill").font(.caption)
+                    }
+                    Text(line.title + (line.isMedication ? (line.dosage.map { " · \($0)" } ?? "") : ""))
+                        .font(.subheadline)
+                }
                 Text(PatientScheduleBuilder.timesText(line.times))
                     .font(.caption.monospacedDigit())
                 if line.muted { MutedBadge().italic(false) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .italic()
-        .foregroundStyle(.secondary)
+        // Overdue rows are marked red and NOT dimmed as a projection (feedback item 4).
+        .italic(!line.isOverdue)
+        .foregroundStyle(line.isOverdue ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
     }
 }

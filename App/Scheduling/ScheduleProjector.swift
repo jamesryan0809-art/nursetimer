@@ -21,6 +21,10 @@ struct ScheduleOccurrence: Identifiable {
     /// True when the task's reminders are muted (feedback item 2) — the schedule still shows
     /// the occurrence, marked, because silence must stay visible.
     let muted: Bool
+    /// True for an unresolved overdue occurrence (feedback item 4) — the task's current
+    /// `nextDueAt` is in the past and it hasn't been given/skipped. Pinned/marked red in every
+    /// Schedule mode until resolved; never aged out or treated as struck/past.
+    let isOverdue: Bool
 }
 
 /// App-layer projection of the next 24 hours across all tasks, built on Core types
@@ -36,9 +40,19 @@ enum ScheduleProjector {
 
         for task in tasks where !task.isPaused {
             let schedule = task.scheduleType
+            if case .prn = schedule { continue }
+            if schedule.isNeedsRepair { continue }
+
+            // Item 4: an unresolved overdue occurrence (nextDueAt in the past) stays visible in
+            // every mode until it's given/skipped — marked overdue, never aged out. The future
+            // projections below start strictly at/after `now`, so this occurrence is additive.
+            if let due = task.nextDueAt, due < now {
+                result.append(make(task, at: due, isOverdue: true))
+            }
+
             switch schedule {
             case .prn, .needsRepair:
-                continue
+                continue   // handled above
 
             case .once(let date):
                 if date >= now, date <= end { result.append(make(task, at: date)) }
@@ -74,11 +88,11 @@ enum ScheduleProjector {
     }
 
     @MainActor
-    private static func make(_ task: CareTask, at date: Date) -> ScheduleOccurrence {
+    private static func make(_ task: CareTask, at date: Date, isOverdue: Bool = false) -> ScheduleOccurrence {
         ScheduleOccurrence(
             date: date, taskID: task.id, patientID: task.patient?.id,
             room: task.patient?.roomNumber ?? "", firstName: task.patient?.firstName,
             title: task.title, dosage: task.dosage, isMedication: task.kind == .medication,
-            colorTagRaw: task.colorTagRaw, muted: !task.notificationsEnabled)
+            colorTagRaw: task.colorTagRaw, muted: !task.notificationsEnabled, isOverdue: isOverdue)
     }
 }
