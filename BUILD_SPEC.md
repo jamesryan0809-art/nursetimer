@@ -160,6 +160,7 @@ Board (the Inactive list never routes to it).
   - kind toggle; title (free text); dosage/route (med only).
   - **Schedule picker [interval-validation]:** *Every N hours + minutes* is an **hours+minutes wheel/stepper bounded to [5 minutes, 24 hours]**, so out-of-range/nonsense intervals are **unenterable** — Core's `IntervalMinutes` validation is the backstop, not the primary gate. Other modes: At set times / Once / PRN.
   - **Last Given time (optional) [last-given-coherence]:** the toggle's value is authoritative — a submitted value updates `lastCompletedAt` **regardless of whether the schedule changed**; clearing the toggle sets `lastCompletedAt = nil`. Whenever the schedule or the anchor changes, `nextDueAt` recomputes via the **same Core path used at creation** (`SchedulingEngine.firstDue`, anchored to `lastGiven ?? now`). Schedule, anchor, `lastCompletedAt`, and `nextDueAt` commit **atomically**.
+  - **Color tag (design pass):** an optional swatch picker (8-color palette + None) that sets `CareTask.colorTagRaw`. Display-only label channel (spec §7) — not a scheduling input.
   - per-task lead & snooze overrides under "Advanced".
   - **Repair flow [fail-loud-decode]:** when opened for a `.needsRepair` task, the schedule field is **empty and required**; **all other task data is preserved**. Saving a repaired schedule clears the repair state and establishes a **new** valid `nextDueAt` from the selected schedule + anchor time — the old (untrusted) `nextDueAt` is **not** reused.
 - **Shift Review**, **Log tab**, **Settings** — as v1.0.
@@ -175,6 +176,12 @@ App lock (Face ID / passcode), notification redaction in privacy mode, local-onl
 
 ## 7. Design Principles
 Minimal, modern, fast. System-native SwiftUI, SF Symbols, system fonts. Color is information (red overdue / orange due-soon / green done). 44pt tap targets; two-tap common actions; no onboarding beyond the one-time disclaimer.
+
+**Two independent color channels (design pass).** There are exactly two uses of color, kept strictly separate so neither can be misread as the other:
+1. **Status** — red overdue / orange due-soon / green done, plus the repair-error treatment. Status OWNS these hues and is the ONLY thing that communicates urgency. It tints the status dot, due-time text, and (in Grid) the chip background.
+2. **Per-med color tag** — an optional nurse-chosen label (`CareTask.colorTagRaw`, "none" default) drawn from a fixed 8-color palette (`TaskColorTag`) that DELIBERATELY EXCLUDES red/orange/green. It is display-only (never a scheduling input) and always renders as a distinct leading channel — a thin left-edge bar on Board/patient-detail/Schedule rows, a small dot on Grid chips — never by recoloring a status element. A tag must never make a row read as more or less urgent. Tags flow through the read models (`ScheduleOccurrence`, `PatientTaskLine`) so every surface renders from the same source.
+
+**Time display (design pass).** All user-facing times render through one shared formatter (`AppTime`) that follows the device locale/clock setting (12h AM/PM or 24h); sort order is always chronological regardless of display format.
 
 ---
 

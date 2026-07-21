@@ -77,6 +77,10 @@ public final class CareTask {
     // pause/resume assign updatedAt).
     public var createdAt: Date = Date()
     public var updatedAt: Date = Date()
+    /// Optional per-med color tag (raw name of an app-layer palette entry, "none" default).
+    /// A display-only channel SEPARATE from status color (spec §7); NOT a scheduling input.
+    /// Property-level default keeps this migration-safe for an existing store.
+    public var colorTagRaw: String = "none"
 
     public var patient: Patient?
 
@@ -98,6 +102,7 @@ public final class CareTask {
         explicitSnoozeAt: Date? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
+        colorTagRaw: String = "none",
         history: [TaskEvent] = []
     ) {
         self.id = id
@@ -114,6 +119,7 @@ public final class CareTask {
         self.explicitSnoozeAt = explicitSnoozeAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.colorTagRaw = colorTagRaw
         self.history = history
     }
 }

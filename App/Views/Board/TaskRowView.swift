@@ -12,6 +12,9 @@ struct TaskRowView: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            // Tag channel (item 2) — separate from status; a thin left-edge bar, no tint on status.
+            TagBar(tag: task.colorTag)
+
             Circle().fill(taskStatus.color).frame(width: 10, height: 10)
                 .accessibilityHidden(true)
 

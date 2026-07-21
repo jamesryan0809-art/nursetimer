@@ -126,12 +126,18 @@ private struct ChipView: View {
         }
     }
 
+    private var tag: TaskColorTag { TaskColorTag(rawValue: occ.colorTagRaw) ?? .none }
+
     var body: some View {
-        Text(occ.title)
-            .font(.caption2).lineLimit(1).truncationMode(.tail)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 5).padding(.vertical, 3)
-            .background(tint.opacity(imminent ? 0.22 : 0.10), in: RoundedRectangle(cornerRadius: 5))
-            .foregroundStyle(imminent ? Color.primary : .secondary)
+        HStack(spacing: 3) {
+            // Tag channel (item 2) — a leading dot, SEPARATE from the status-driven background tint.
+            TagDot(tag: tag, diameter: 6)
+            Text(occ.title)
+                .font(.caption2).lineLimit(1).truncationMode(.tail)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 5).padding(.vertical, 3)
+        .background(tint.opacity(imminent ? 0.22 : 0.10), in: RoundedRectangle(cornerRadius: 5))
+        .foregroundStyle(imminent ? Color.primary : .secondary)
     }
 }

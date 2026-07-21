@@ -16,6 +16,8 @@ struct ScheduleOccurrence: Identifiable {
     let title: String
     let dosage: String?
     let isMedication: Bool
+    /// Raw per-med color-tag name, carried through so Schedule/Grid can render the tag channel.
+    let colorTagRaw: String
 }
 
 /// App-layer projection of the next 24 hours across all tasks, built on Core types
@@ -73,6 +75,7 @@ enum ScheduleProjector {
         ScheduleOccurrence(
             date: date, taskID: task.id, patientID: task.patient?.id,
             room: task.patient?.roomNumber ?? "", firstName: task.patient?.firstName,
-            title: task.title, dosage: task.dosage, isMedication: task.kind == .medication)
+            title: task.title, dosage: task.dosage, isMedication: task.kind == .medication,
+            colorTagRaw: task.colorTagRaw)
     }
 }

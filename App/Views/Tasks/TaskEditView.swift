@@ -38,6 +38,7 @@ struct TaskEditView: View {
     @State private var leadOverride = 15
     @State private var useSnoozeOverride = false
     @State private var snoozeOverride = 3
+    @State private var colorTag: TaskColorTag = .none
 
     private var canSave: Bool {
         !title.trimmingCharacters(in: .whitespaces).isEmpty
@@ -80,6 +81,14 @@ struct TaskEditView: View {
                     TextField("Dosage (e.g. 25 mg PO)", text: $dosage)
                     TextField("Route (optional)", text: $route)
                 }
+            }
+
+            Section {
+                ColorTagPicker(selection: $colorTag)
+            } header: {
+                Text("Color tag")
+            } footer: {
+                Text("A visual label to group meds at a glance. Separate from the red/orange/green urgency colors — it never changes how urgent a task looks.")
             }
 
             SchedulePickerView(draft: $draft, requireSelection: target.isRepair,
@@ -127,6 +136,7 @@ struct TaskEditView: View {
             if let lead = task.leadTimeMinutes { useLeadOverride = true; leadOverride = lead }
             if let snz = task.snoozeMinutes { useSnoozeOverride = true; snoozeOverride = snz }
             if let last = task.lastCompletedAt { setLastGiven = true; lastGiven = last }
+            colorTag = task.colorTag
             // Repair starts with an EMPTY, required schedule; edit prefills it.
             if target.isRepair {
                 draft = ScheduleDraft()
@@ -151,18 +161,55 @@ struct TaskEditView: View {
         case .add(let patient, _):
             store.addTask(to: patient, kind: kind, title: trimmedTitle, dosage: dose, route: rte,
                           schedule: schedule, lastGiven: lastGivenValue,
-                          leadTimeMinutes: lead, snoozeMinutes: snooze)
+                          leadTimeMinutes: lead, snoozeMinutes: snooze, colorTag: colorTag)
         case .edit(let task):
             store.updateTask(task, kind: kind, title: trimmedTitle, dosage: dose, route: rte,
                              schedule: schedule, lastGiven: lastGivenValue,
-                             leadTimeMinutes: lead, snoozeMinutes: snooze)
+                             leadTimeMinutes: lead, snoozeMinutes: snooze, colorTag: colorTag)
         case .repair(let task):
             // Preserve the other edits, then apply the repair with a fresh anchor.
             store.updateTask(task, kind: kind, title: trimmedTitle, dosage: dose, route: rte,
                              schedule: task.scheduleType, lastGiven: nil,
-                             leadTimeMinutes: lead, snoozeMinutes: snooze)
+                             leadTimeMinutes: lead, snoozeMinutes: snooze, colorTag: colorTag)
             store.repair(task, with: schedule, anchor: lastGivenValue ?? .now)
         }
         dismiss()
+    }
+}
+
+/// A horizontal row of tappable swatches for the per-med color tag (item 2). "None" is a
+/// hollow slashed circle; the selected swatch gets a ring. Fixed palette from `TaskColorTag`.
+private struct ColorTagPicker: View {
+    @Binding var selection: TaskColorTag
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 14) {
+                ForEach(TaskColorTag.allCases) { tag in
+                    Button { selection = tag } label: { swatch(tag) }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(tag.displayName)
+                        .accessibilityAddTraits(selection == tag ? .isSelected : [])
+                }
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    @ViewBuilder
+    private func swatch(_ tag: TaskColorTag) -> some View {
+        let isSelected = selection == tag
+        ZStack {
+            if let color = tag.color {
+                Circle().fill(color)
+            } else {
+                Image(systemName: "slash.circle").font(.title3).foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 28, height: 28)
+        .overlay(
+            Circle().strokeBorder(isSelected ? Color.primary : .clear, lineWidth: 2)
+                .padding(-3)
+        )
     }
 }

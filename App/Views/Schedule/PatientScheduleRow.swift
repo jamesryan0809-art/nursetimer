@@ -8,6 +8,9 @@ struct PatientTaskLine: Identifiable {
     let dosage: String?
     let isMedication: Bool
     let times: [Date]
+    let colorTagRaw: String
+
+    var colorTag: TaskColorTag { TaskColorTag(rawValue: colorTagRaw) ?? .none }
 }
 
 /// Builds By-Patient lines from the shared `ScheduleProjector` — the single source of
@@ -24,7 +27,8 @@ enum PatientScheduleBuilder {
         return byTask.map { _, occs -> PatientTaskLine in
             let f = occs[0]
             return PatientTaskLine(id: f.taskID, title: f.title, dosage: f.dosage,
-                                   isMedication: f.isMedication, times: occs.map { $0.date }.sorted())
+                                   isMedication: f.isMedication, times: occs.map { $0.date }.sorted(),
+                                   colorTagRaw: f.colorTagRaw)
         }.sorted { ($0.times.first ?? .distantFuture) < ($1.times.first ?? .distantFuture) }
     }
 
@@ -37,13 +41,16 @@ enum PatientScheduleBuilder {
 struct PatientTaskRow: View {
     let line: PatientTaskLine
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(line.title + (line.isMedication ? (line.dosage.map { " · \($0)" } ?? "") : ""))
-                .font(.subheadline)
-            Text(PatientScheduleBuilder.timesText(line.times))
-                .font(.caption.monospacedDigit())
+        HStack(spacing: 12) {
+            TagBar(tag: line.colorTag, height: 30)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(line.title + (line.isMedication ? (line.dosage.map { " · \($0)" } ?? "") : ""))
+                    .font(.subheadline)
+                Text(PatientScheduleBuilder.timesText(line.times))
+                    .font(.caption.monospacedDigit())
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .italic()
         .foregroundStyle(.secondary)
     }

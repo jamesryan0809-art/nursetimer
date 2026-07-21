@@ -155,6 +155,15 @@ Xcode 16+ must complete each item.
   lighter/neutral); "now" row highlighted and auto-scrolled into view on open; tap a chip →
   patient detail. Confirm header truncation, horizontal + vertical scroll, and now-row anchor
   on a real device with 6+ rooms.
+- ⬜ **Per-med color tag (design pass):** Add/Edit form swatch picker (8-color palette + None)
+  persists on `CareTask.colorTagRaw`; migration-safe default "none" on an existing store.
+  Renders as a leading channel — left-edge bar on Board / patient-detail / Schedule rows, dot on
+  Grid chips — SEPARATE from status color; confirm a tag never alters the red/orange/green
+  urgency reading and that untagged rows stay aligned with tagged ones.
+- ⬜ **12-hour / device-locale time (design pass):** all times (Board due labels, Schedule
+  rows, Grid row labels + chips, Log timestamps, form previews) follow the device clock setting
+  via one `AppTime` formatter; verify switching iOS to 24h flips every surface and that sort
+  order stays chronological.
 - ⬜ Log: reverse-chron events, per-patient filter, empty state (no export).
 - ⬜ Notifications: authorization request; pre/due/snooze delivery; deterministic ids;
   full replan on change + foreground; obsolete requests removed/replaced; budget respected.

@@ -214,9 +214,11 @@ final class NurseStore {
 
     @discardableResult
     func addTask(to patient: Patient, kind: TaskKind, title: String, dosage: String?, route: String?,
-                 schedule: ScheduleType, lastGiven: Date?, leadTimeMinutes: Int?, snoozeMinutes: Int?) -> CareTask {
+                 schedule: ScheduleType, lastGiven: Date?, leadTimeMinutes: Int?, snoozeMinutes: Int?,
+                 colorTag: TaskColorTag = .none) -> CareTask {
         let task = CareTask(kind: kind, title: title, dosage: dosage, route: route,
-                            scheduleType: schedule, leadTimeMinutes: leadTimeMinutes, snoozeMinutes: snoozeMinutes)
+                            scheduleType: schedule, leadTimeMinutes: leadTimeMinutes, snoozeMinutes: snoozeMinutes,
+                            colorTagRaw: colorTag.rawValue)
         task.patient = patient
         task.lastCompletedAt = lastGiven
         task.nextDueAt = SchedulingEngine.firstDue(for: schedule, anchor: lastGiven ?? .now, calendar: calendar)
@@ -233,7 +235,8 @@ final class NurseStore {
     ///    schedule or the anchor changed, anchored to `lastGiven ?? now`.
     ///  - schedule, anchor, lastCompletedAt, and nextDueAt commit atomically (item 7).
     func updateTask(_ task: CareTask, kind: TaskKind, title: String, dosage: String?, route: String?,
-                    schedule: ScheduleType, lastGiven: Date?, leadTimeMinutes: Int?, snoozeMinutes: Int?) {
+                    schedule: ScheduleType, lastGiven: Date?, leadTimeMinutes: Int?, snoozeMinutes: Int?,
+                    colorTag: TaskColorTag = .none) {
         let priorLastGiven = task.lastCompletedAt
         let scheduleChanged = task.scheduleType != schedule
         let anchorChanged = lastGiven != priorLastGiven
@@ -244,6 +247,7 @@ final class NurseStore {
         task.route = route
         task.leadTimeMinutes = leadTimeMinutes
         task.snoozeMinutes = snoozeMinutes
+        task.colorTagRaw = colorTag.rawValue      // display-only tag channel (item 2)
         task.scheduleType = schedule
         task.lastCompletedAt = lastGiven          // always reflect the form (submit or clear)
 

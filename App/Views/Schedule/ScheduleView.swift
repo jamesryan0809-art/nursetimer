@@ -133,8 +133,11 @@ struct ScheduleView: View {
 
 private struct OccurrenceRow: View {
     let occ: ScheduleOccurrence
+    private var tag: TaskColorTag { TaskColorTag(rawValue: occ.colorTagRaw) ?? .none }
+
     var body: some View {
         HStack(spacing: 12) {
+            TagBar(tag: tag, height: 24)
             Text(AppTime.short(occ.date))
                 .font(.subheadline.monospacedDigit())
                 .frame(width: 64, alignment: .leading)
