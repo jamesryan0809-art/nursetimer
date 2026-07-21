@@ -232,18 +232,23 @@ final class NurseStore {
 
     // MARK: Task CRUD
 
+    /// `firstDueOverride` (feedback item 1): when set, it becomes the initial `nextDueAt`
+    /// directly — a synthetic first-due the nurse chose (interval + no last-given case). It
+    /// does NOT fabricate a `lastCompletedAt`; no administration event is invented. Subsequent
+    /// dosing follows normal interval math from actual given times.
     @discardableResult
     func addTask(to patient: Patient, kind: TaskKind, title: String, dosage: String?, route: String?,
                  schedule: ScheduleType, lastGiven: Date?, leadTimeMinutes: Int?, snoozeMinutes: Int?,
                  colorTag: TaskColorTag = .none, notificationsEnabled: Bool = true,
-                 prnFrequencyText: String = "") -> CareTask {
+                 prnFrequencyText: String = "", firstDueOverride: Date? = nil) -> CareTask {
         let task = CareTask(kind: kind, title: title, dosage: dosage, route: route,
                             scheduleType: schedule, leadTimeMinutes: leadTimeMinutes, snoozeMinutes: snoozeMinutes,
                             colorTagRaw: colorTag.rawValue, notificationsEnabled: notificationsEnabled,
                             prnFrequencyText: prnFrequencyText)
         task.patient = patient
-        task.lastCompletedAt = lastGiven
-        task.nextDueAt = SchedulingEngine.firstDue(for: schedule, anchor: lastGiven ?? .now, calendar: calendar)
+        task.lastCompletedAt = lastGiven   // stays nil when there's no last-given — never fabricated
+        task.nextDueAt = firstDueOverride
+            ?? SchedulingEngine.firstDue(for: schedule, anchor: lastGiven ?? .now, calendar: calendar)
         context.insert(task)
         commit()
         return task
@@ -259,7 +264,7 @@ final class NurseStore {
     func updateTask(_ task: CareTask, kind: TaskKind, title: String, dosage: String?, route: String?,
                     schedule: ScheduleType, lastGiven: Date?, leadTimeMinutes: Int?, snoozeMinutes: Int?,
                     colorTag: TaskColorTag = .none, notificationsEnabled: Bool = true,
-                    prnFrequencyText: String = "") {
+                    prnFrequencyText: String = "", firstDueOverride: Date? = nil) {
         let priorLastGiven = task.lastCompletedAt
         let scheduleChanged = task.scheduleType != schedule
         let anchorChanged = lastGiven != priorLastGiven
@@ -276,7 +281,12 @@ final class NurseStore {
         task.scheduleType = schedule
         task.lastCompletedAt = lastGiven          // always reflect the form (submit or clear)
 
-        if scheduleChanged || anchorChanged {
+        if let firstDueOverride {
+            // Nurse-set synthetic first-due (feedback item 1) — set nextDueAt directly, no
+            // fabricated lastCompletedAt.
+            task.explicitSnoozeAt = nil
+            task.nextDueAt = firstDueOverride
+        } else if scheduleChanged || anchorChanged {
             task.explicitSnoozeAt = nil
             task.nextDueAt = SchedulingEngine.firstDue(for: schedule, anchor: lastGiven ?? .now, calendar: calendar)
         }

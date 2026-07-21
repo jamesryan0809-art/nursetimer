@@ -178,6 +178,11 @@ Xcode 16+ must complete each item.
   title → schedule (with consequence preview) → PRN frequency (PRN only) → last given → Details
   (dosage, route — med only, at the bottom) → color tag. Confirm the flow reads top-to-bottom
   and that Details/color-tag still save correctly from their new positions.
+- ⬜ **Adjustable first reminder (feedback pass 3, item 1):** interval schedule + last-given
+  blank → the "First reminder" preview is an editable DatePicker defaulting to now+interval and
+  live-updating with the interval until touched. Saving sets `nextDueAt` directly (synthetic
+  first-due) with `lastCompletedAt` still nil — confirm NO administration event is created and
+  that later Given events anchor the interval from the actual given time.
 - ⬜ **Early Given fix (feedback pass 3, item 5):** mark a FIXED-time task Given before its
   scheduled time — confirm `nextDueAt` advances to the NEXT listed time (not the same one) and
   the old due's pre/due/taper notifications are canceled by the replan; the pending due alert
