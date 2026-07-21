@@ -61,7 +61,7 @@ private struct LogRow: View {
     }
 
     private var title: String {
-        let room = event.task?.patient?.roomNumber.map { "Rm \($0) · " } ?? ""
+        let room = (event.task?.patient?.roomNumber).map { "Rm \($0) · " } ?? ""
         let name = event.task?.title ?? "Task"
         return "\(actionWord) — \(room)\(name)"
     }

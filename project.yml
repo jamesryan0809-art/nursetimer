@@ -54,7 +54,7 @@ targets:
       - package: NurseTimer
         product: NurseTimerModels
       - target: NurseTimerWatch
-        embed: true
+        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nursetimer.app
