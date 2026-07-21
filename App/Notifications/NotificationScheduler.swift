@@ -130,7 +130,9 @@ final class NotificationScheduler: NotificationScheduling {
             content.threadIdentifier = taskID.uuidString
             if slot == .due || slot.isSnooze { content.categoryIdentifier = Self.categoryID }
         case .group(let digest):
-            content.title = digest.title
+            // Privacy ON: redact to a kind-aware, count/room-only title ("3 medications overdue
+            // · Rm 422"). Kind is permitted in redacted content (spec §6.3); no names/dosage.
+            content.title = privacyMode ? redactedDigestTitle(digest, displays: displays) : digest.title
             content.body = digest.body
             content.threadIdentifier = digest.category == .repair ? "repair" : "group"
         case .repairWarning(let taskID):
@@ -164,14 +166,48 @@ final class NotificationScheduler: NotificationScheduling {
 
     // MARK: Content
     //
-    // Privacy mode (spec §6.3) redacts to room only — no patient name, med name,
-    // dosage, route, or notes ever appear in a notification. Full detail lives in the
-    // app (behind the app lock). When privacy mode is off, content is descriptive.
+    // Privacy mode (spec §6.3) redacts to task KIND + room — no patient name, med name,
+    // dosage, route, or notes ever appear in a notification. Kind (Medication / Care) is
+    // permitted in redacted content: it is not clinically identifying and it lets the nurse
+    // make a routing decision from the wrist (feedback pass 3, item 3). Full detail lives in
+    // the app (behind the app lock). When privacy mode is off, content is descriptive.
 
     private func titleLine(_ d: TaskDisplay?) -> String {
         guard let d else { return "Task due" }
-        if privacyMode { return "Task due · Rm \(d.room)" }
+        if privacyMode { return "\(kindNoun(d.kind, capitalized: true)) due · Rm \(d.room)" }
         return "Rm \(d.room) · \(d.title)"
+    }
+
+    /// "Medication" / "Care" (singular) or "medications" / "care tasks" (plural). Kind is the
+    /// only clinical-ish token allowed in redacted content (spec §6.3, feedback item 3).
+    private func kindNoun(_ kind: TaskKind, capitalized: Bool = false, plural: Bool = false) -> String {
+        switch (kind, plural) {
+        case (.medication, false): return capitalized ? "Medication" : "medication"
+        case (.medication, true):  return "medications"
+        case (.generic, false):    return capitalized ? "Care" : "care task"
+        case (.generic, true):     return "care tasks"
+        }
+    }
+
+    /// Redacted, kind-aware digest title ("3 medications overdue · Rm 422"). Repair digests
+    /// carry no clinical content, so their title is left unchanged.
+    private func redactedDigestTitle(_ digest: GroupDigest, displays: [UUID: TaskDisplay]) -> String {
+        guard digest.category != .repair else { return digest.title }
+        let count = digest.memberTaskIDs.count
+        let kinds = Set(digest.memberTaskIDs.compactMap { displays[$0]?.kind })
+        let noun: String
+        if kinds == [.medication] { noun = kindNoun(.medication, plural: count != 1) }
+        else if kinds == [.generic] { noun = kindNoun(.generic, plural: count != 1) }
+        else { noun = count == 1 ? "task" : "tasks" }   // mixed kinds
+        let verb = digest.category == .overdue ? "overdue" : "due"
+        let roomSuffix: String
+        if let room = digest.room {
+            roomSuffix = " · Rm \(room)"
+        } else {
+            let rooms = Set(digest.memberTaskIDs.compactMap { displays[$0]?.room }).count
+            roomSuffix = rooms > 1 ? " · \(rooms) rooms" : ""
+        }
+        return "\(count) \(noun) \(verb)\(roomSuffix)"
     }
 
     private func bodyLine(_ d: TaskDisplay?, slot: NotificationSlot) -> String {

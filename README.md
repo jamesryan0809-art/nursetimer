@@ -178,6 +178,12 @@ Xcode 16+ must complete each item.
   title → schedule (with consequence preview) → PRN frequency (PRN only) → last given → Details
   (dosage, route — med only, at the bottom) → color tag. Confirm the flow reads top-to-bottom
   and that Details/color-tag still save correctly from their new positions.
+- ⬜ **Graduated redaction (feedback pass 3, item 3):** with privacy mode ON, notifications
+  read "[Medication|Care] due · Rm X" and digests "3 medications overdue · Rm 422" — kind
+  included, name/dosage/detail still excluded. Confirm pre/snooze/due/digests all follow the
+  format, mixed-kind digests say "tasks", privacy OFF is unchanged, and (Verify-on-Mac)
+  **watch-side tap-through detail remains sample-data until the sync milestone** — the watch
+  inherits the redacted phone notification automatically but its in-app detail is still stubbed.
 - ⬜ **Adjustable first reminder (feedback pass 3, item 1):** interval schedule + last-given
   blank → the "First reminder" preview is an editable DatePicker defaulting to now+interval and
   live-updating with the interval until touched. Saving sets `nextDueAt` directly (synthetic
