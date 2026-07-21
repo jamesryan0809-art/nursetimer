@@ -3,9 +3,9 @@ import SwiftData
 import NurseTimerCore
 import NurseTimerModels
 
-/// Board (spec §6.2): patient cards sorted by soonest due task, a global "Up Next"
-/// strip, overdue pinned red, and tasks needing schedule repair pinned above
-/// everything with an unmissable treatment.
+/// Board (spec §6.2) — the primary patient entry point. Patient cards are tappable
+/// (→ patient detail) while task rows keep their swipe actions; a global "Up Next" strip,
+/// overdue pinned red, and schedule-repair tasks pinned above everything.
 struct BoardView: View {
     @Environment(NurseStore.self) private var store
     @Query private var patients: [Patient]
@@ -18,6 +18,7 @@ struct BoardView: View {
     private var settings: AppSettings { store.settings() }
 
     private var activePatients: [Patient] { patients.filter { $0.isActive } }
+    private var inactivePatients: [Patient] { patients.filter { !$0.isActive } }
     private var scheduledTasks: [CareTask] { tasks.filter { $0.patient?.isActive == true } }
 
     private var repairTasks: [CareTask] {
@@ -41,34 +42,35 @@ struct BoardView: View {
         NavigationStack {
             Group {
                 if activePatients.isEmpty {
+                    // §7 empty state: one line + one button.
                     ContentUnavailableView {
                         Label("No patients yet", systemImage: "bed.double")
                     } actions: {
                         Button("Add Patient") { addingPatient = true }
+                        if !inactivePatients.isEmpty {
+                            NavigationLink { PatientListView() } label: {
+                                Text("Inactive patients (\(inactivePatients.count))")
+                            }
+                        }
                     }
                 } else {
                     boardList
                 }
             }
             .navigationTitle("Board")
-            .sheet(isPresented: $addingPatient) {
-                NavigationStack { PatientFormView(patient: nil) }
-            }
+            .navigationDestination(for: Patient.self) { PatientDetailView(patient: $0) }
+            .sheet(isPresented: $addingPatient) { NavigationStack { PatientFormView(patient: nil) } }
+            .sheet(isPresented: $showingSettings) { SettingsView(settings: store.settings()) }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    NavigationLink { PatientListView() } label: { Label("Patients", systemImage: "person.2") }
-                }
                 if roomFilter != nil {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Show all") { roomFilter = nil }
-                    }
+                    ToolbarItem(placement: .topBarLeading) { Button("Show all") { roomFilter = nil } }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { addingPatient = true } label: { Label("Add Patient", systemImage: "plus") }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showingSettings = true } label: { Label("Settings", systemImage: "gear") }
                 }
-            }
-            .sheet(isPresented: $showingSettings) {
-                SettingsView(settings: store.settings())
             }
         }
     }
@@ -98,11 +100,25 @@ struct BoardView: View {
             }
 
             ForEach(sortedPatients) { patient in
-                Section(patient.display) {
+                Section {
+                    // Tapping the card body opens the patient; task-row swipes still act on tasks.
+                    NavigationLink(value: patient) {
+                        PatientCardHeader(patient: patient, now: now, settings: settings)
+                    }
                     ForEach(orderedTasks(for: patient)) { task in
                         TaskRowView(task: task, now: now, settings: settings)
                             .taskSwipeActions(task: task, store: store)
                     }
+                }
+            }
+
+            // Inline Add Patient stays visible when the list is short.
+            if activePatients.count <= 3 {
+                Button { addingPatient = true } label: { Label("Add Patient", systemImage: "plus.circle") }
+            }
+            if !inactivePatients.isEmpty {
+                NavigationLink { PatientListView() } label: {
+                    Label("Inactive patients (\(inactivePatients.count))", systemImage: "archivebox")
                 }
             }
         }
@@ -123,6 +139,28 @@ struct BoardView: View {
             if a.isAttention != b.isAttention { return a.isAttention && !b.isAttention }
             return (lhs.nextDueAt ?? .distantFuture) < (rhs.nextDueAt ?? .distantFuture)
         }
+    }
+}
+
+private struct PatientCardHeader: View {
+    let patient: Patient
+    let now: Date
+    let settings: AppSettings
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(patient.display).font(.headline)
+            Text(summary).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private var summary: String {
+        let n = patient.tasks.count
+        let count = "\(n) task\(n == 1 ? "" : "s")"
+        if let soonest = patient.tasks.compactMap({ $0.isPaused ? nil : $0.nextDueAt }).min() {
+            return "\(count) · next \(DueText.string(for: soonest, now: now))"
+        }
+        return count
     }
 }
 

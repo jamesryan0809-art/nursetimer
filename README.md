@@ -230,6 +230,12 @@ Xcode 16+ must complete each item.
   persist projections as events. Pending-Mac tests: grouping, ordering, exclusions,
   midnight-crossing occurrences, identity stability.
 
+### Post-build-day navigation (items 2–4)
+- ⬜ **Item 2:** Board patient cards tap → patient detail; task-row swipes still act on tasks;
+  top-left Patients button retired; Add Patient visible in the toolbar + inline when the list
+  is short; empty state "No patients yet · Add Patient"; inactive patients reachable via a
+  footer link (no dead end).
+
 ### Cross-cutting
 - ⬜ Dynamic Type scales legibly (rows readable at arm's length).
 - ⬜ Light and dark appearance both correct (status colors only).
