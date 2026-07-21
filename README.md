@@ -235,6 +235,10 @@ Xcode 16+ must complete each item.
   top-left Patients button retired; Add Patient visible in the toolbar + inline when the list
   is short; empty state "No patients yet · Add Patient"; inactive patients reachable via a
   footer link (no dead end).
+- ⬜ **Item 3:** Patient detail hub — always-visible Add Medication / Add Task (preset kind,
+  one tap to the form); the patient's day laid out chronologically with inline projected times
+  (reuses `PatientScheduleBuilder` / By-Patient rendering — no duplicated projection logic);
+  Given/Done, Snooze, Skip Once, Pause, Edit on each row; Edit/Deactivate/Delete patient.
 
 ### Cross-cutting
 - ⬜ Dynamic Type scales legibly (rows readable at arm's length).

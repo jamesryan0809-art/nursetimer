@@ -9,18 +9,12 @@ import NurseTimerModels
 enum ScheduleMode: String, CaseIterable { case byTime = "By Time", byPatient = "By Patient" }
 
 /// A patient's projected day, for the By-Patient view. Identities are model-derived.
+/// (`PatientTaskLine` / `PatientTaskRow` are shared in PatientScheduleRow.swift.)
 private struct PatientDay: Identifiable {
     let id: String                // patientID (or a stable "detached" key)
     let label: String
     let tasks: [PatientTaskLine]
     var soonest: Date { tasks.first?.times.first ?? .distantFuture }
-}
-private struct PatientTaskLine: Identifiable {
-    let id: UUID                  // taskID
-    let title: String
-    let dosage: String?
-    let isMedication: Bool
-    let times: [Date]
 }
 
 struct ScheduleView: View {
@@ -52,19 +46,11 @@ struct ScheduleView: View {
     /// "Rm 412 · Metoprolol: 0900 · 1700 · 0100". Same exclusions and source data.
     private var byPatient: [PatientDay] {
         let byPat = Dictionary(grouping: occurrences) { $0.patientID?.uuidString ?? "detached-\($0.room)" }
-        let days = byPat.map { key, occs -> PatientDay in
+        return byPat.map { key, occs -> PatientDay in
             let first = occs[0]
             let label = "Rm \(first.room)" + (first.firstName.map { " · \($0)" } ?? "")
-            let byTask = Dictionary(grouping: occs) { $0.taskID }
-            let lines = byTask.map { tid, tOccs -> PatientTaskLine in
-                let f = tOccs[0]
-                return PatientTaskLine(id: tid, title: f.title, dosage: f.dosage,
-                                       isMedication: f.isMedication,
-                                       times: tOccs.map { $0.date }.sorted())
-            }.sorted { ($0.times.first ?? .distantFuture) < ($1.times.first ?? .distantFuture) }
-            return PatientDay(id: key, label: label, tasks: lines)
-        }
-        return days.sorted { $0.soonest < $1.soonest }
+            return PatientDay(id: key, label: label, tasks: PatientScheduleBuilder.lines(from: occs))
+        }.sorted { $0.soonest < $1.soonest }
     }
 
     var body: some View {
@@ -149,29 +135,6 @@ private struct OccurrenceRow: View {
     }
 }
 
-private struct PatientTaskRow: View {
-    let line: PatientTaskLine
-
-    private static let hhmm: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "HHmm"
-        return f
-    }()
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(line.title + (line.isMedication ? (line.dosage.map { " · \($0)" } ?? "") : ""))
-                .font(.subheadline)
-            Text(line.times.map { Self.hhmm.string(from: $0) }.joined(separator: " · "))
-                .font(.caption.monospacedDigit())
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // Projections are styled lighter/italic, same as the By-Time view.
-        .italic()
-        .foregroundStyle(.secondary)
-    }
-}
 
 private struct ClusterBadge: View {
     let items: [ScheduleOccurrence]

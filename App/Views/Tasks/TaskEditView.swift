@@ -4,15 +4,15 @@ import NurseTimerModels
 
 /// What the Add/Edit/Repair task sheet is doing.
 enum TaskEditTarget: Identifiable {
-    case add(Patient)
+    case add(Patient, TaskKind)
     case edit(CareTask)
     case repair(CareTask)
 
     var id: String {
         switch self {
-        case .add(let p):    "add-\(p.id.uuidString)"
-        case .edit(let t):   "edit-\(t.id.uuidString)"
-        case .repair(let t): "repair-\(t.id.uuidString)"
+        case .add(let p, let k): "add-\(k.rawValue)-\(p.id.uuidString)"
+        case .edit(let t):       "edit-\(t.id.uuidString)"
+        case .repair(let t):     "repair-\(t.id.uuidString)"
         }
     }
     var isRepair: Bool { if case .repair = self { return true }; return false }
@@ -117,8 +117,8 @@ struct TaskEditView: View {
 
     private func load() {
         switch target {
-        case .add:
-            break   // defaults
+        case .add(_, let presetKind):
+            kind = presetKind   // "Add Medication" / "Add Task" preset the type
         case .edit(let task), .repair(let task):
             kind = task.kind
             title = task.title
@@ -148,7 +148,7 @@ struct TaskEditView: View {
         let lastGivenValue = setLastGiven ? lastGiven : nil
 
         switch target {
-        case .add(let patient):
+        case .add(let patient, _):
             store.addTask(to: patient, kind: kind, title: trimmedTitle, dosage: dose, route: rte,
                           schedule: schedule, lastGiven: lastGivenValue,
                           leadTimeMinutes: lead, snoozeMinutes: snooze)
