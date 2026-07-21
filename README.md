@@ -153,8 +153,13 @@ Xcode 16+ must complete each item.
   horizontal scroll past ~4–6); rows = 1-hour blocks; each occurrence a compact chip at its
   time×room cell; status coloring matches Board (imminent occurrence tinted, later projections
   lighter/neutral); "now" row highlighted and auto-scrolled into view on open; tap a chip →
-  patient detail. Confirm header truncation, horizontal + vertical scroll, and now-row anchor
+  task detail sheet. Confirm header truncation, horizontal + vertical scroll, and now-row anchor
   on a real device with 6+ rooms.
+- ⬜ **Tap-to-act task detail (design pass, feedback item 1):** tapping any task row (Board,
+  patient detail, Schedule By-Time/By-Patient rows, Grid chip) opens a sheet with large
+  Given/Done · Snooze · Skip Once · Pause (confirmed) · Edit buttons; paused → Resume;
+  needsRepair → Fix schedule. Confirm the swipe actions still work as shortcuts, that Edit
+  presents cleanly over the detail sheet, and that each action dismisses and refreshes the row.
 - ⬜ **Per-med color tag (design pass):** Add/Edit form swatch picker (8-color palette + None)
   persists on `CareTask.colorTagRaw`; migration-safe default "none" on an existing store.
   Renders as a leading channel — left-edge bar on Board / patient-detail / Schedule rows, dot on

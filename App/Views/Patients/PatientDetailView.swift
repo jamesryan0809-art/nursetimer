@@ -40,8 +40,11 @@ struct PatientDetailView: View {
                     Text("No medications or tasks yet.").foregroundStyle(.secondary)
                 }
                 ForEach(chronologicalTasks) { task in
-                    HubTaskRow(task: task, times: timesByTask[task.id] ?? [], now: .now, settings: settings)
-                        .taskSwipeActions(task: task, store: store)
+                    Button { store.taskDetailRequest = .init(task: task) } label: {
+                        HubTaskRow(task: task, times: timesByTask[task.id] ?? [], now: .now, settings: settings)
+                    }
+                    .buttonStyle(.plain)
+                    .taskSwipeActions(task: task, store: store)
                 }
             }
 

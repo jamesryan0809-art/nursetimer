@@ -106,8 +106,11 @@ struct BoardView: View {
                         PatientCardHeader(patient: patient, now: now, settings: settings)
                     }
                     ForEach(orderedTasks(for: patient)) { task in
-                        TaskRowView(task: task, now: now, settings: settings)
-                            .taskSwipeActions(task: task, store: store)
+                        Button { store.taskDetailRequest = .init(task: task) } label: {
+                            TaskRowView(task: task, now: now, settings: settings)
+                        }
+                        .buttonStyle(.plain)
+                        .taskSwipeActions(task: task, store: store)
                     }
                 }
             }

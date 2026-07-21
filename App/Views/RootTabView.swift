@@ -28,6 +28,9 @@ struct RootTabView: View {
         .sheet(item: $store.editRequest) { target in
             NavigationStack { TaskEditView(target: target) }
         }
+        .sheet(item: $store.taskDetailRequest) { target in
+            TaskDetailSheet(task: target.task)
+        }
         // First-launch disclaimer (§1.2), acknowledged once.
         .fullScreenCover(isPresented: Binding(get: { !disclaimerAcknowledged }, set: { _ in })) {
             DisclaimerView(acknowledged: $disclaimerAcknowledged)

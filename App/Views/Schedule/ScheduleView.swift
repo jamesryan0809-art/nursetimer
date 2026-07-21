@@ -99,7 +99,10 @@ struct ScheduleView: View {
             ForEach(byHour, id: \.bucket) { group in
                 Section {
                     if isCluster(group.items) { ClusterBadge(items: group.items) }
-                    ForEach(group.items) { occ in OccurrenceRow(occ: occ) }
+                    ForEach(group.items) { occ in
+                        Button { openTask(occ.taskID) } label: { OccurrenceRow(occ: occ) }
+                            .buttonStyle(.plain)
+                    }
                 } header: {
                     Text(group.label).font(.headline)
                 }
@@ -112,11 +115,21 @@ struct ScheduleView: View {
         List {
             ForEach(byPatient) { day in
                 Section(day.label) {
-                    ForEach(day.tasks) { line in PatientTaskRow(line: line) }
+                    ForEach(day.tasks) { line in
+                        Button { openTask(line.id) } label: { PatientTaskRow(line: line) }
+                            .buttonStyle(.plain)
+                    }
                 }
             }
         }
         .listStyle(.plain)
+    }
+
+    /// A projected row taps through to the tap-to-act task sheet (feedback item 1).
+    private func openTask(_ id: UUID) {
+        if let task = tasks.first(where: { $0.id == id }) {
+            store.taskDetailRequest = .init(task: task)
+        }
     }
 
     /// 3+ tasks within a 15-minute window inside this hour bucket = a crunch point.

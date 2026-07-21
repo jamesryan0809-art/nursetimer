@@ -7,6 +7,7 @@ import NurseTimerModels
 /// lighter. Tap a chip → the patient's detail. A "now" row is highlighted and auto-scrolled
 /// into view. Same exclusions as the other modes (they come from `ScheduleProjector`).
 struct GridScheduleView: View {
+    @Environment(NurseStore.self) private var store
     let occurrences: [ScheduleOccurrence]
     let patients: [Patient]            // active, room-sorted
     let tasks: [CareTask]              // for status lookup
@@ -88,7 +89,9 @@ struct GridScheduleView: View {
     private func cell(_ occs: [ScheduleOccurrence], patient: Patient, taskLookup: [UUID: CareTask]) -> some View {
         VStack(spacing: 2) {
             ForEach(occs.sorted { $0.date < $1.date }) { occ in
-                NavigationLink(value: patient) {
+                Button {
+                    if let task = taskLookup[occ.taskID] { store.taskDetailRequest = .init(task: task) }
+                } label: {
                     ChipView(occ: occ, status: chipStatus(occ, taskLookup: taskLookup), imminent: isImminent(occ, taskLookup: taskLookup))
                 }
                 .buttonStyle(.plain)

@@ -27,6 +27,9 @@ final class NurseStore {
     var route: AppRoute?
     /// Centralized Add/Edit/Repair task presentation (root presents the sheet).
     var editRequest: TaskEditTarget?
+    /// Centralized tap-to-act task-detail presentation (root presents the sheet). Any task
+    /// row across Board / patient detail / Schedule / Grid sets this to open the action sheet.
+    var taskDetailRequest: TaskDetailTarget?
 
     func task(withID id: UUID) -> CareTask? {
         fetch(FetchDescriptor<CareTask>(predicate: #Predicate { $0.id == id }), "task").first
