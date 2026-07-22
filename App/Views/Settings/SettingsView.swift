@@ -36,6 +36,14 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Apple Watch") {
+                    NavigationLink {
+                        WatchSetupView()
+                    } label: {
+                        Label("Watch & reminders setup", systemImage: "applewatch")
+                    }
+                }
+
                 Section("Data") {
                     Button("Clear shift log", role: .destructive) { confirmClearLog = true }
                     Button("Delete all data", role: .destructive) { confirmDeleteAll = true }

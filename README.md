@@ -255,6 +255,16 @@ Xcode 16+ must complete each item.
   data); sample-data previews. Live complication data can't be validated until
   WatchConnectivity + shared state exist (a later milestone).
 - ⬜ Watch UI is built on `NurseTimerCore` + `SyncTransport` only — no phone persistence coupling.
+- ⬜ **Watch & Reminders setup screen (nurse-support):** Settings → Apple Watch → "Watch &
+  reminders setup". Confirm the live checks read correctly on real paired devices —
+  notification permission + Time-Sensitive (from `UNUserNotificationCenter`), and **watch paired
+  / NurseTimer-installed-on-watch** (from a read-only `WCSession` probe on the **iOS** side).
+  Note: this iOS-side `WCSession.activate()` is the app's FIRST use of WatchConnectivity and is
+  unverified; it is a read-only diagnostic (sends nothing) and is independent of the still-stubbed
+  data-sync milestone — do not confuse the two. Verify the "Fix"/"Open Notification Settings"
+  buttons deep-link to NurseTimer's notification settings; the watch-side steps (install app,
+  Mirror my iPhone, Wrist Detection) are instruction-only because iOS exposes no URL to those
+  screens and no API to toggle them.
 
 ### Notification budget & taper (Core items 1–4 — verified in `swift test`; tune on Mac)
 - ✅ Cap ≤ 60 and full task representation at any load (61+ overdue; mixed; global escape
