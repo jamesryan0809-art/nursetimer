@@ -27,6 +27,18 @@ struct PatientDetailView: View {
             PatientScheduleBuilder.lines(for: patient.tasks).map { ($0.id, $0.times) })
     }
 
+    /// Today's resolved occurrences (given/done/skipped, not reverted), newest first — derived
+    /// live from TaskEvents (feedback pass 4, item 5). Display only, nothing persisted.
+    private var completedToday: [TaskEvent] {
+        let cal = Calendar.autoupdatingCurrent
+        return patient.tasks
+            .flatMap { $0.history }
+            .filter { !$0.reverted
+                && [.given, .done, .skipped].contains($0.action)
+                && cal.isDateInToday($0.timestamp) }
+            .sorted { $0.timestamp > $1.timestamp }
+    }
+
     var body: some View {
         List {
             Section {
@@ -48,6 +60,8 @@ struct PatientDetailView: View {
             taskSection("Medications", kind: .medication)
             taskSection("Care tasks", kind: .generic)
             taskSection("Reminders", kind: .reminder)
+
+            completedTodaySection
 
             if let notes = patient.notes, !notes.isEmpty {
                 Section("Notes") { Text(notes) }
@@ -72,6 +86,27 @@ struct PatientDetailView: View {
                             isPresented: $confirmingDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) { store.deletePatient(patient); dismiss() }
             Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    /// Collapsed-by-default "Completed today (N)" — resolved occurrences from TaskEvents, with
+    /// action + time (feedback pass 4, item 5). Expanded state is remembered for the session.
+    @ViewBuilder
+    private var completedTodaySection: some View {
+        let done = completedToday
+        if !done.isEmpty {
+            Section {
+                DisclosureGroup(isExpanded: Binding(
+                    get: { store.completedExpandedPatients.contains(patient.id) },
+                    set: { expanded in
+                        if expanded { store.completedExpandedPatients.insert(patient.id) }
+                        else { store.completedExpandedPatients.remove(patient.id) }
+                    })) {
+                    ForEach(done) { event in CompletedRow(event: event) }
+                } label: {
+                    Text("Completed today (\(done.count))").font(.headline)
+                }
+            }
         }
     }
 
@@ -118,5 +153,29 @@ private struct HubTaskRow: View {
                     .padding(.leading, 22)
             }
         }
+    }
+}
+
+/// One resolved occurrence in the "Completed today" section: action + task title + time
+/// (feedback pass 4, item 5). Derived from a TaskEvent; display only.
+private struct CompletedRow: View {
+    let event: TaskEvent
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol).foregroundStyle(.secondary).frame(width: 20)
+            Text("\(actionWord) · \(event.task?.title ?? "Task")").font(.subheadline)
+            Spacer()
+            Text(AppTime.short(event.timestamp)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+        }
+    }
+
+    private var actionWord: String {
+        switch event.action {
+        case .given: "Given"; case .done: "Done"; case .skipped: "Skipped"; default: "Resolved"
+        }
+    }
+    private var symbol: String {
+        event.action == .skipped ? "forward.circle" : "checkmark.circle"
     }
 }

@@ -43,6 +43,10 @@ final class NurseStore {
     /// `requestGiven` when the completion is ambiguous; the root presents a chooser and calls
     /// `resolveGiven`. Nil when there's nothing to disambiguate.
     var givenChoice: GivenChoiceRequest?
+    /// Patient IDs whose "Completed today" section is expanded (feedback pass 4, item 5). Held
+    /// in memory so the choice is remembered for the app session (collapsed by default); not
+    /// persisted.
+    var completedExpandedPatients: Set<UUID> = []
     /// Deep-link intent from a notification tap (root view observes it).
     var route: AppRoute?
     /// Centralized Add/Edit/Repair task presentation (root presents the sheet).

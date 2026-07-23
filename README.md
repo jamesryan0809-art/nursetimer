@@ -175,6 +175,10 @@ Xcode 16+ must complete each item.
   Unambiguous Given (not overdue, or well before the next lead window) does NOT prompt. Verify
   the per-occurrence display (done struck+checked / pending highlighted / upcoming) on the
   By-Patient row, task sheet, and patient detail. Core-covered by `SchedulingEngineTests`.
+- ⬜ **Completed-today section (feedback pass 4, item 5):** patient detail shows a
+  collapsed-by-default "Completed today (N)" disclosure beneath the task sections, listing
+  today's given/done/skipped occurrences (action + time) from TaskEvents; count in the header,
+  nothing persisted, reverted (undone) items excluded, expanded state remembered for the session.
 - ⬜ **Delete task (feedback pass 4, item 1):** task sheet + Edit screen both offer a
   confirmed, destructive Delete; the confirm names task + room and states log history is
   removed (TaskEvent cascade). Confirm pending notifications are canceled (replan) and that
