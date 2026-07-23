@@ -214,6 +214,10 @@ Xcode 16+ must complete each item.
   title → schedule (with consequence preview) → PRN frequency (PRN only) → last given → Details
   (dosage, route — med only, at the bottom) → color tag. Confirm the flow reads top-to-bottom
   and that Details/color-tag still save correctly from their new positions.
+- ⬜ **Board sort by room (feedback pass 4, item 6):** Settings → Board → Sort by (Next due /
+  Room ↑ / Room ↓), persisted in `AppSettings.boardSortRaw`. Confirm room sort is numeric-aware
+  (412A, 412B, 1201 order sensibly) and that overdue/needs-repair patients stay pinned at the
+  top under every sort mode.
 - ⬜ **Non-blocking reduction (feedback pass 3, item 2):** the "many tasks scheduled" reduction
   no longer sits in the top banner. Confirm it shows as a one-time-per-change dismissible alert
   (on app open / when it first becomes true) and a persistent tappable nav-bar indicator

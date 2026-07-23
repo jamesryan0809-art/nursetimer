@@ -22,6 +22,16 @@ struct SettingsView: View {
                             value: $settings.defaultSnoozeMinutes, in: 1...15)
                 }
 
+                Section("Board") {
+                    Picker("Sort by", selection: Binding(
+                        get: { BoardSort(rawValue: settings.boardSortRaw) ?? .nextDue },
+                        set: { settings.boardSortRaw = $0.rawValue; store.persistPreferences() })) {
+                        ForEach(BoardSort.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }
+                } footer: {
+                    Text("Overdue patients stay pinned at the top for any sort.")
+                }
+
                 Section("Privacy & Security") {
                     Toggle("Hide details on lock screen", isOn: $settings.privacyModeNotifications)
                     Toggle("App lock (Face ID / passcode)", isOn: $settings.appLockEnabled)

@@ -6,6 +6,18 @@ import NurseTimerModels
 /// Board (spec §6.2) — the primary patient entry point. Patient cards are tappable
 /// (→ patient detail) while task rows keep their swipe actions; a global "Up Next" strip,
 /// overdue pinned red, and schedule-repair tasks pinned above everything.
+/// Board card ordering (feedback pass 4, item 6). Persisted in `AppSettings.boardSortRaw`.
+enum BoardSort: String, CaseIterable {
+    case nextDue, roomAsc, roomDesc
+    var label: String {
+        switch self {
+        case .nextDue:  return "Next due"
+        case .roomAsc:  return "Room ↑"
+        case .roomDesc: return "Room ↓"
+        }
+    }
+}
+
 struct BoardView: View {
     @Environment(NurseStore.self) private var store
     @Query private var patients: [Patient]
@@ -34,9 +46,30 @@ struct BoardView: View {
             .prefix(3).map { $0 }
     }
 
+    private var boardSort: BoardSort { BoardSort(rawValue: settings.boardSortRaw) ?? .nextDue }
+
     private var sortedPatients: [Patient] {
         let visible = roomFilter.map { r in activePatients.filter { $0.roomNumber == r } } ?? activePatients
-        return visible.sorted { soonestDue($0) < soonestDue($1) }
+        switch boardSort {
+        case .nextDue:
+            // Overdue naturally floats up (a past due sorts before any future due).
+            return visible.sorted { soonestDue($0) < soonestDue($1) }
+        case .roomAsc, .roomDesc:
+            return visible.sorted { a, b in
+                // Overdue pinning preserved: attention (overdue / needs-repair) patients pinned
+                // atop the room sort (feedback pass 4, item 6).
+                let aAtt = hasAttention(a), bAtt = hasAttention(b)
+                if aAtt != bAtt { return aAtt && !bAtt }
+                // Natural, numeric-aware room comparison (412A < 412B < 1201).
+                let cmp = a.roomNumber.localizedStandardCompare(b.roomNumber)
+                return boardSort == .roomAsc ? cmp == .orderedAscending : cmp == .orderedDescending
+            }
+        }
+    }
+
+    /// True if any of the patient's tasks needs attention (overdue or schedule-repair).
+    private func hasAttention(_ patient: Patient) -> Bool {
+        patient.tasks.contains { status(of: $0, now: now, settings: settings).isAttention }
     }
 
     var body: some View {
