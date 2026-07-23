@@ -44,8 +44,12 @@ struct TaskEditView: View {
     // Adjustable first reminder (feedback item 1) — interval + no-last-given only.
     @State private var firstReminder = Date.now
     @State private var firstReminderCustom = false
+    @State private var confirmingDelete = false
 
     private var settings: AppSettings { store.settings() }
+
+    /// The task being edited, for the Delete action (feedback pass 4, item 1); nil for add/repair.
+    private var editingTask: CareTask? { if case .edit(let t) = target { return t }; return nil }
 
     private var canSave: Bool {
         !title.trimmingCharacters(in: .whitespaces).isEmpty
@@ -119,6 +123,21 @@ struct TaskEditView: View {
                 Text("Color tag")
             } footer: {
                 Text("A visual label to group meds at a glance. Separate from the red/orange/green urgency colors — it never changes how urgent a task looks.")
+            }
+
+            // Delete (feedback pass 4, item 1) — edit only; add/repair have nothing to delete.
+            if let task = editingTask {
+                Section {
+                    Button(role: .destructive) { confirmingDelete = true } label: {
+                        Label("Delete Task", systemImage: "trash").frame(maxWidth: .infinity)
+                    }
+                }
+                .confirmationDialog("Delete this task?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+                    Button("Delete", role: .destructive) { store.deleteTask(task); dismiss() }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Rm \(task.patient?.roomNumber ?? "?") · \(task.title) — this permanently removes the task and its log history, and cancels its reminders. This can't be undone.")
+                }
             }
         }
         .navigationTitle(navTitle)

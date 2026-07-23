@@ -334,10 +334,15 @@ final class NurseStore {
         commit()
     }
 
+    /// Delete a task and its log history (TaskEvent cascade, spec §3.2 relationship). The
+    /// follow-on `commit()`→`replan()` cancels all of the task's pending notifications
+    /// (cancel-all-then-reschedule; the task is gone from `planningTasks`). Not undoable
+    /// (feedback pass 4, items 1 & 4).
     func deleteTask(_ task: CareTask) {
+        let room = task.patient?.roomNumber ?? "?"   // capture before the object is deleted
         scheduler.removeRepairWarning(taskID: task.id)
         context.delete(task)
-        commit()
+        if commit() { acknowledge("Deleted · Rm \(room)", .warning) }
     }
 
     // MARK: Save + replan

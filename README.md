@@ -155,6 +155,11 @@ Xcode 16+ must complete each item.
   lighter/neutral); "now" row highlighted and auto-scrolled into view on open; tap a chip →
   task detail sheet. Confirm header truncation, horizontal + vertical scroll, and now-row anchor
   on a real device with 6+ rooms.
+- ⬜ **Delete task (feedback pass 4, item 1):** task sheet + Edit screen both offer a
+  confirmed, destructive Delete; the confirm names task + room and states log history is
+  removed (TaskEvent cascade). Confirm pending notifications are canceled (replan) and that
+  deleting from the nested Edit screen also closes the task sheet (it checks the task still
+  exists). Patient delete unchanged.
 - ⬜ **Action acknowledgment (feedback micro-pass):** every successful Given/Skip/Snooze/
   Pause/Resume fires a haptic + a brief bottom toast ("Given · next due 5:07 PM", etc.) read
   from post-commit state; toast auto-dismisses ~2s, never covers the nav bar or action buttons,

@@ -18,6 +18,7 @@ struct TaskDetailSheet: View {
     let task: CareTask
 
     @State private var confirmingPause = false
+    @State private var confirmingDelete = false
     @State private var editing = false
 
     private var settings: AppSettings { store.settings() }
@@ -55,7 +56,15 @@ struct TaskDetailSheet: View {
             } message: {
                 Text("Rm \(task.patient?.roomNumber ?? "?") · \(task.title) — no reminders until you resume it.")
             }
-            .sheet(isPresented: $editing) {
+            .confirmationDialog("Delete this task?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+                Button("Delete", role: .destructive) { store.deleteTask(task); dismiss() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Rm \(task.patient?.roomNumber ?? "?") · \(task.title) — this permanently removes the task and its log history, and cancels its reminders. This can't be undone.")
+            }
+            // If the task was deleted from the nested Edit screen, close this sheet too rather
+            // than lingering on a now-deleted task (feedback pass 4, item 1).
+            .sheet(isPresented: $editing, onDismiss: { if store.task(withID: task.id) == nil { dismiss() } }) {
                 NavigationStack { TaskEditView(target: needsRepair ? .repair(task) : .edit(task)) }
             }
         }
@@ -140,6 +149,13 @@ struct TaskDetailSheet: View {
             Label("Edit", systemImage: "pencil").frame(maxWidth: .infinity)
         }
         .buttonStyle(.bordered)
+
+        Button(role: .destructive) {
+            confirmingDelete = true
+        } label: {
+            Label("Delete", systemImage: "trash").frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered).tint(.red)
     }
 
     /// "Reminders off" shown prominently with a one-tap re-enable (feedback item 2). Silence
