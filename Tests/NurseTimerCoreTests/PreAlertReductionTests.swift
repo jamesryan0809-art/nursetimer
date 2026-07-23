@@ -17,21 +17,61 @@ final class PreAlertReductionTests: XCTestCase {
         }
     }
 
-    // MARK: Item 1a — realistic load currently trims the pre-alerts
+    // MARK: Item 2 — PERMANENT REGRESSION: realistic load retains ALL pre-alerts
 
-    /// DIAGNOSIS (item 1a): with pre-scheduled tapers, an 8-task shift pushes baseline demand far
-    /// past the 60-cap. Under the OLD reduction order (pre-alerts trimmed FIRST) every pre-alert
-    /// is dropped even though trimming taper tails alone would have kept them — the reported bug.
-    /// (This assertion is FLIPPED into the permanent guarantee below once the order is redesigned.)
-    func test_item1a_diagnosis_realisticLoad_dropsAllPreAlerts_underOldOrder() {
+    /// The redesigned order (item 2) trims taper tails to the 5-ping floor BEFORE any pre-alert,
+    /// so a realistic 8-task shift keeps every pre-alert (8 × (pre+due+5) = 56 ≤ 60). This is the
+    /// item-1a scenario flipped into a permanent guarantee — a 30-min ping must survive a full
+    /// shift load.
+    func test_item2_realisticLoad_retainsAllPreAlerts() {
         let cal = utcCalendar()
         let now = dt(cal, 2026, 7, 19, 8, 0)
         let tasks = realisticShift(8, now: now)
         let plan = NotificationPlanner.plan(tasks: tasks, settings: .default, now: now, calendar: cal)
         XCTAssertLessThanOrEqual(plan.notifications.count, 60)
-        XCTAssertEqual(dueCount(plan), 8, "every due alert must survive")
-        XCTAssertEqual(preCount(plan), 0, "DIAGNOSIS: old order drops all pre-alerts at realistic load")
-        XCTAssertTrue(plan.wasTrimmed)
+        XCTAssertEqual(preCount(plan), 8, "every pre-alert must survive a realistic shift load")
+        XCTAssertEqual(dueCount(plan), 8)
+        XCTAssertFalse(plan.planWasCoalesced, "fits at the chain floor without grouping")
+        XCTAssertEqual(plan.reduction.preAlertsTrimmed, 0)
+        XCTAssertGreaterThan(plan.reduction.taperPingsTrimmed, 0, "tails were shed, not the pre-alerts")
+    }
+
+    /// Order proof (item 2a): reduction sheds taper tails before pre-alerts — a load where
+    /// tail-trimming alone fits keeps all pre-alerts AND reports taper pings trimmed.
+    func test_item2_trimsTaperTailsBeforePreAlerts() {
+        let cal = utcCalendar()
+        let now = dt(cal, 2026, 7, 19, 8, 0)
+        let plan = NotificationPlanner.plan(tasks: realisticShift(8, now: now),
+                                            settings: .default, now: now, calendar: cal)
+        XCTAssertGreaterThan(plan.reduction.chainDepthReduced, 0)
+        XCTAssertEqual(plan.reduction.preAlertsTrimmed, 0)
+    }
+
+    /// Protection (item 2b/2c): when pre-alerts MUST be trimmed after tails hit the floor,
+    /// default-lead pre-alerts go first and explicit-lead ones are protected. 9 tasks at floor =
+    /// 63 > 60 → exactly 3 pre-alerts trimmed, all from the default-lead group; every
+    /// explicit-lead pre-alert survives.
+    func test_item2_explicitLeadPreAlerts_protectedOverDefault() {
+        let cal = utcCalendar()
+        let now = dt(cal, 2026, 7, 19, 8, 0)
+        var tasks: [TaskSnapshot] = []
+        var explicitIDs: Set<UUID> = []
+        for i in 0..<9 {
+            let id = UUID()
+            let explicit = i >= 5                    // 5 default-lead, 4 explicit-lead
+            if explicit { explicitIDs.insert(id) }
+            tasks.append(TaskSnapshot(id: id, roomNumber: "R\(i)", scheduleType: everyHr(4),
+                                      nextDueAt: now + Double((i + 1) * 20 * 60),
+                                      leadTimeMinutes: explicit ? 20 : nil))
+        }
+        let plan = NotificationPlanner.plan(tasks: tasks, settings: .default, now: now, calendar: cal)
+        XCTAssertLessThanOrEqual(plan.notifications.count, 60)
+        XCTAssertFalse(plan.planWasCoalesced, "trimming default pre-alerts is enough; no grouping")
+        XCTAssertEqual(plan.reduction.preAlertsTrimmed, 3)
+        XCTAssertEqual(plan.reduction.preAlertsProtectedKept, 4)
+        // Every explicit-lead task keeps its pre-alert.
+        let preIDs = Set(plan.notifications.filter { $0.kind == .pre }.compactMap { $0.taskID })
+        XCTAssertTrue(explicitIDs.isSubset(of: preIDs), "explicit-lead pre-alerts must be protected")
     }
 
     // MARK: Item 1b — near-due creation skips the pre-alert as past (not a budget problem)

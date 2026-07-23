@@ -107,11 +107,20 @@ public struct ReductionSummary: Equatable, Sendable {
     public let chainDepthReduced: Int
     /// Digests formed across all tiers/categories (task + repair).
     public let digestsFormed: Int
+    /// Total taper pings removed by the tail-first depth reduction (phase-3 then phase-2). This
+    /// is the class the redesigned order sheds FIRST, before any pre-alert (feedback pass 5, item 2).
+    public let taperPingsTrimmed: Int
+    /// Pre-alerts kept for tasks with an EXPLICIT per-task lead override — the nurse's stated
+    /// intent, protected until after default-lead pre-alerts and only trimmed before grouping.
+    public let preAlertsProtectedKept: Int
 
-    public init(preAlertsTrimmed: Int = 0, chainDepthReduced: Int = 0, digestsFormed: Int = 0) {
+    public init(preAlertsTrimmed: Int = 0, chainDepthReduced: Int = 0, digestsFormed: Int = 0,
+                taperPingsTrimmed: Int = 0, preAlertsProtectedKept: Int = 0) {
         self.preAlertsTrimmed = preAlertsTrimmed
         self.chainDepthReduced = chainDepthReduced
         self.digestsFormed = digestsFormed
+        self.taperPingsTrimmed = taperPingsTrimmed
+        self.preAlertsProtectedKept = preAlertsProtectedKept
     }
     /// Any reduction of any kind occurred.
     public var any: Bool { preAlertsTrimmed > 0 || chainDepthReduced > 0 || digestsFormed > 0 }
@@ -213,6 +222,7 @@ public enum NotificationPlanner {
 
             let lead = SchedulingEngine.effectiveLeadMinutes(task, settings)
             let snooze = SchedulingEngine.effectiveSnoozeMinutes(task, settings)
+            let hasExplicitLead = task.leadTimeMinutes != nil   // nurse-stated intent (item 2b)
             let window = windowStart(of: due, calendar)
 
             // The post-due tapered chain is pre-scheduled for EVERY occurrence in the
@@ -242,12 +252,14 @@ public enum NotificationPlanner {
                     fireDate: due, payload: .task(taskID: task.id, dueDate: due, slot: .due))
                 entries.append(TaskEntry(id: task.id, room: task.roomNumber, dueDate: due,
                                          windowStart: window, category: .upcoming,
-                                         pre: pre, due: dueNotif, chain: chain))
+                                         pre: pre, due: dueNotif, chain: chain,
+                                         hasExplicitLead: hasExplicitLead))
             } else {
                 guard !chain.isEmpty else { continue }   // overdue but no future pings left in horizon
                 entries.append(TaskEntry(id: task.id, room: task.roomNumber, dueDate: due,
                                          windowStart: window, category: .overdue,
-                                         pre: nil, due: nil, chain: chain))
+                                         pre: nil, due: nil, chain: chain,
+                                         hasExplicitLead: hasExplicitLead))
             }
         }
 
@@ -263,7 +275,9 @@ public enum NotificationPlanner {
         let reduction = ReductionSummary(
             preAlertsTrimmed: result.preTrimmed,
             chainDepthReduced: result.depthReduced,
-            digestsFormed: groupCount)
+            digestsFormed: groupCount,
+            taperPingsTrimmed: result.taperPingsTrimmed,
+            preAlertsProtectedKept: result.preAlertsProtectedKept)
         return NotificationPlan(
             notifications: all.sorted { lhs, rhs in
                 lhs.fireDate != rhs.fireDate ? lhs.fireDate < rhs.fireDate : lhs.identifier < rhs.identifier
@@ -318,17 +332,28 @@ public enum NotificationPlanner {
         let pre: PlannedNotification?
         let due: PlannedNotification?
         let chain: [PlannedNotification]
+        /// The task carried an explicit per-task lead override — protects its pre-alert during
+        /// reduction (feedback pass 5, item 2b).
+        let hasExplicitLead: Bool
     }
 
     private struct Unit { var ids: [UUID]; var window: Date }
     private struct RoomWindow: Hashable { let room: String; let window: Date }
 
-    // MARK: Budget enforcement (reduction order: pre → chains → coalesce upcoming → coalesce overdue → global)
+    // MARK: Budget enforcement
+    //
+    // Reduction order (feedback pass 5, item 2) — pre-alerts are workflow-critical (they are when
+    // the nurse pulls meds), so they give way LAST, not first:
+    //   1. taper TAILS uniformly to the 5-ping floor (phase-3, then phase-2);
+    //   2. default-lead pre-alerts, furthest-due first;
+    //   3. explicit-lead pre-alerts (nurse-stated intent), furthest-due first;
+    //   4. escape valves — coalesce upcoming, then overdue (room → cross-room → global).
+    // Due alerts and the 5-ping chain floor are never touched.
 
     private static func enforceBudget(
         entries: [TaskEntry], settings: SchedulerSettings, cap: Int, calendar: Calendar
     ) -> (notifications: [PlannedNotification], wasTrimmed: Bool, groupCount: Int,
-          preTrimmed: Int, depthReduced: Int) {
+          preTrimmed: Int, depthReduced: Int, taperPingsTrimmed: Int, preAlertsProtectedKept: Int) {
         let floor = settings.minSnoozeDepth
         let byID = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
 
@@ -355,20 +380,23 @@ public enum NotificationPlanner {
                 + overdue.reduce(0) { $0 + unitFootprint($1, .overdue) }
         }
 
-        // 1. Trim pre-alerts, furthest-due first.
-        if total() > cap {
-            for e in entries.filter({ $0.category == .upcoming }).sorted(by: { $0.dueDate > $1.dueDate }) {
+        // 1. Shorten taper tails uniformly, down to the five-ping floor — BEFORE any pre-alert.
+        while total() > cap, depth > floor { depth -= 1; wasTrimmed = true }
+        // 2. Default-lead pre-alerts, furthest-due first.
+        func trimPreAlerts(explicit: Bool) {
+            guard total() > cap else { return }
+            for e in entries.filter({ $0.category == .upcoming && $0.hasExplicitLead == explicit })
+                .sorted(by: { $0.dueDate > $1.dueDate }) {
                 if total() <= cap { break }
                 if preKept.remove(e.id) != nil { wasTrimmed = true; preTrimmed += 1 }
             }
         }
-        // 2. Shorten chains uniformly, down to the five-ping floor.
-        while total() > cap, depth > floor { depth -= 1; wasTrimmed = true }
-        // 3. Coalesce upcoming tasks (room → cross-room → global). The coalescing signal
-        //    is carried by `groupCount` (below) → planWasCoalesced / reduction.digestsFormed;
-        //    no separate bool is needed.
+        trimPreAlerts(explicit: false)
+        // 3. Explicit-lead pre-alerts (protected) — only after defaults, only before grouping.
+        trimPreAlerts(explicit: true)
+        // 4. Coalesce upcoming, then overdue (room → cross-room → global). The coalescing signal
+        //    is carried by `groupCount` (below) → planWasCoalesced / reduction.digestsFormed.
         while total() > cap, mergeOnce(&upcoming, byID: byID) {}
-        // 4. Coalesce overdue tasks (room → cross-room → global).
         while total() > cap, mergeOnce(&overdue, byID: byID) {}
 
         // Assemble.
@@ -391,7 +419,16 @@ public enum NotificationPlanner {
         }
         emit(upcoming, .upcoming)
         emit(overdue, .overdue)
-        return (out, wasTrimmed, groupCount, preTrimmed, initialDepth - depth)
+
+        // Accounting (item 2d): taper pings shed by the uniform depth cut, and protected
+        // (explicit-lead) pre-alerts still standing.
+        let taperPingsTrimmed = entries.reduce(0) { $0 + max(0, $1.chain.count - depth) }
+        let preAlertsProtectedKept = entries.filter {
+            $0.category == .upcoming && $0.hasExplicitLead && $0.pre != nil && preKept.contains($0.id)
+        }.count
+
+        return (out, wasTrimmed, groupCount, preTrimmed, initialDepth - depth,
+                taperPingsTrimmed, preAlertsProtectedKept)
     }
 
     /// One escalating merge: same room+window → same window (cross-room) → global.

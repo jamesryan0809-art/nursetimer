@@ -240,8 +240,9 @@ final class NotificationPlannerTests: XCTestCase {
     // MARK: Reduction order a → d
 
     func test_reductionOrder_preAlertsTrimmedBeforeGrouping() {
-        // Reduction order guarantees pre-alerts are dropped before any coalescing — so if
-        // the plan coalesced, no pre-alert survives (item 1/3 reduction order).
+        // Grouping is the last escape valve: all pre-alerts (default- then explicit-lead) are
+        // trimmed before ANY coalescing — so if the plan coalesced, no pre-alert survives
+        // (feedback pass 5 reduction order: tails → default pre → explicit pre → grouping).
         let cal = utcCalendar()
         let now = dt(cal, 2026, 7, 19, 8, 0)
         let tasks = (0..<40).map { i in

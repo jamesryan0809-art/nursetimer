@@ -126,7 +126,7 @@ Xcode 16+ must complete each item.
   in App/Watch/Widget plists (installer required it). Confirm all three targets install.
 
 ### Core (already verified where noted)
-- ✅ Swift XCTest suite: **99 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
+- ✅ Swift XCTest suite: **103 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
 - ⬜ SwiftData model-container initialization (`PersistenceController.makeContainer`).
 - ⬜ Store file is `FileProtectionType.complete` at rest.
 - ⬜ CRUD persistence (patients, tasks, events, settings) survives relaunch.
@@ -305,6 +305,15 @@ Xcode 16+ must complete each item.
 - ✅ Tapered post-due chain (Phase 1 @S / Phase 2 @15m / Phase 3 @30m), pre-scheduled for
   future occurrences; 5-ping floor then whole-chain digest replacement; repair warnings
   planner-owned + digested; `planWasReduced` + counts.
+- ✅ **Reduction order redesigned (feedback pass 5, item 2):** taper tails shed FIRST (to the
+  5-ping floor), then default-lead pre-alerts, then explicit-lead pre-alerts, then grouping.
+  A realistic 8-task shift retains all pre-alerts (permanent regression); explicit-lead
+  pre-alerts protected over default-lead — all tested in `PreAlertReductionTests`.
+- ⬜ **KEY HARDWARE CHECK (feedback pass 5):** on a real device under a FULL realistic shift
+  load (8–10 tasks with pre-scheduled tapers), confirm a **30-min pre-alert actually fires** at
+  due − 30m. This is the on-device confirmation of the reduction-order fix — the reported bug
+  was pre-alerts silently never firing. Also confirm a task saved with due − lead already past
+  fires only the due alert (item 3 preview should have warned).
 - ⬜ **Tune on Mac:** pre-scheduled tapers raise baseline notification demand, so grouping
   can activate at realistic loads (~15–20 tasks per horizon). Evaluate the "reminders were
   reduced" banner on device so it stays informative rather than noisy — consider surfacing

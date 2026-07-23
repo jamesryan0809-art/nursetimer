@@ -100,13 +100,14 @@ Only the next 12 hours are scheduled; the planner recomputes the whole set on ev
 
 **Repair warnings are OWNED by the planner (item 2):** planned **FIRST** against the cap; task notifications fit the remainder. Exempt from trimming but coalesced into ONE repair digest (`"N tasks need schedule repair — tap to fix"`) above `repairDigestThreshold` (5) or when they'd starve the tasks. Immediate trigger. Routing: an individual warning tap → that task's repair form; a repair digest tap → the Board's repair section. The scheduler removes obsolete delivered repair notifications when membership changes (repaired / newly broken) and doesn't re-buzz stable ones.
 
-**Reduction order — joint, cross-category allocation (each step only as far as needed; individual alerts preferred while budget allows):**
-- **a. Trim pre-alerts**, furthest-due first.
-- **b. Shorten chains uniformly from the tail** (slow phase first) down to the **five-ping floor**.
-- **c. Coalesce upcoming tasks** — escalating *same room+window* → *cross-room per window* → **global** (`"N tasks due — open app"`).
-- **d. Coalesce overdue tasks** — same ladder: `"3 overdue · Rm 422"` → `"6 overdue · 3 rooms"` → **global** `"N tasks overdue — open app"`. **Each ungrouped overdue task keeps ≥5 pings; when that can't fit, its whole chain is replaced by digest membership carrying its task ID.**
+**Reduction order (redesigned — feedback pass 5, item 2). Pre-alerts are workflow-critical (they are when a nurse pulls meds), so they are NOT the most expendable class — they give way LAST, after taper tails but before the grouping escape valves. Each step runs only as far as needed:**
+- **a. Shorten chains uniformly from the tail** (phase-3 slow pings, then phase-2) down to the **five-ping floor** — **before touching any pre-alert**.
+- **b. Trim default-lead pre-alerts**, furthest-due first.
+- **c. Trim explicit-lead pre-alerts** (a per-task lead override is the nurse's stated intent) — only **after** default-lead ones, and only **before** the escape valves.
+- **d. Coalesce upcoming tasks** — escalating *same room+window* → *cross-room per window* → **global** (`"N tasks due — open app"`).
+- **e. Coalesce overdue tasks** — same ladder: `"3 overdue · Rm 422"` → `"6 overdue · 3 rooms"` → **global** `"N tasks overdue — open app"`. **Each ungrouped overdue task keeps ≥5 pings; when that can't fit, its whole chain is replaced by digest membership carrying its task ID.**
 
-The global tier guarantees representation (worst case: one digest per category ≤ cap). Plan flags: `planWasReduced: Bool` + `ReductionSummary { preAlertsTrimmed, chainDepthReduced, digestsFormed }` (item 4), plus `planWasCoalesced`/`coalescedGroupCount`, `wasTrimmed`, `settingsAdjusted`, and `tasksNeedingRepair: [TaskID]`.
+Due alerts and the five-ping chain floor are **never** touched. A realistic 8-task shift (with pre-scheduled tapers) now **retains all pre-alerts** — a permanent regression test. The global tier guarantees representation (worst case: one digest per category ≤ cap). Plan flags: `planWasReduced: Bool` + `ReductionSummary { preAlertsTrimmed, chainDepthReduced, digestsFormed, taperPingsTrimmed, preAlertsProtectedKept }`, plus `planWasCoalesced`/`coalescedGroupCount`, `wasTrimmed`, `settingsAdjusted`, and `tasksNeedingRepair: [TaskID]`.
 
 **Reduction surfacing is non-blocking (design pass, feedback item 2).** Reminder reduction is informational, not an error, so it no longer occupies the top-of-screen banner (which obstructed controls). Instead it drives: (a) a **one-time-per-change**, dismissible alert on app open and whenever the reduction condition first becomes true or its details change; and (b) a small **persistent, tappable nav-bar indicator** on the Board while reduction is active, which re-shows the details on demand. Every task remains on the board — only ping timing is adjusted. **Persistence-error banners are unaffected and keep their existing priority** — they are never demoted by this change.
 
