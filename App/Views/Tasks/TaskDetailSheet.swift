@@ -31,6 +31,16 @@ struct TaskDetailSheet: View {
                 VStack(spacing: 12) {
                     header
 
+                    // Which of today's fixed-time doses are done (feedback pass 4, item 2c).
+                    let occurrences = task.todayOccurrences()
+                    if !occurrences.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Today's doses").font(.caption).foregroundStyle(.secondary)
+                            OccurrenceMarksView(marks: occurrences)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
                     if task.isPRN {
                         PRNGuidanceView(lastGiven: task.lastCompletedAt,
                                         frequencyText: task.prnFrequencyText, compact: false)
@@ -104,7 +114,7 @@ struct TaskDetailSheet: View {
         if !task.notificationsEnabled { mutedBanner }
 
         Button {
-            store.markGivenOrDone(task); dismiss()
+            store.requestGiven(task); dismiss()
         } label: {
             Label(task.kind == .medication ? "Given" : "Done", systemImage: "checkmark")
                 .frame(maxWidth: .infinity)

@@ -4,6 +4,14 @@ import SwiftData
 import NurseTimerCore
 import NurseTimerModels
 
+/// A pending "which dose was given?" disambiguation for a fixed-times task (feedback pass 4,
+/// item 2b). Carries the task, the candidate occurrences, and the completion time.
+struct GivenChoiceRequest {
+    let task: CareTask
+    let candidates: [SchedulingEngine.GivenCandidate]
+    let date: Date
+}
+
 /// The application-data layer: the single place that mutates persistence, keeps
 /// `nextDueAt` in sync with Core's scheduling engine, and re-runs the
 /// `NotificationPlanner` after every relevant change.
@@ -31,6 +39,10 @@ final class NurseStore {
     /// persisted commit; the UI observes it to fire a haptic + brief toast. Read from
     /// post-commit state so the "next due" string is the actual recomputed value.
     var acknowledgment: ActionAck?
+    /// A pending fixed-times "which dose was given?" choice (feedback pass 4, item 2b). Set by
+    /// `requestGiven` when the completion is ambiguous; the root presents a chooser and calls
+    /// `resolveGiven`. Nil when there's nothing to disambiguate.
+    var givenChoice: GivenChoiceRequest?
     /// Deep-link intent from a notification tap (root view observes it).
     var route: AppRoute?
     /// Centralized Add/Edit/Repair task presentation (root presents the sheet).
@@ -134,6 +146,59 @@ final class NurseStore {
         if commit() {
             let verb = action == .given ? "Given" : "Done"
             acknowledge(givenAckMessage(task, verb: verb), .success)
+        }
+    }
+
+    /// Interactive "Given" entry point (feedback pass 4, item 2b). For a fixed-times task whose
+    /// current occurrence is overdue AND whose completion time has reached the next listed dose's
+    /// lead window, this is AMBIGUOUS — raise a chooser (`givenChoice`) instead of guessing.
+    /// Otherwise it completes the current occurrence (the default single-`nextDueAt` behavior).
+    /// Notification/background Given keeps calling `markGivenOrDone` directly (no UI to ask).
+    func requestGiven(_ task: CareTask, at date: Date = .now) {
+        guard !task.scheduleType.isNeedsRepair, let due = task.nextDueAt else {
+            markGivenOrDone(task, at: date); return
+        }
+        let lead = task.leadTimeMinutes ?? settings().defaultLeadTimeMinutes
+        let candidates = SchedulingEngine.fixedGivenCandidates(
+            schedule: task.scheduleType, currentDue: due, completedAt: date,
+            leadMinutes: lead, now: .now, calendar: calendar)
+        if candidates.count > 1 {
+            givenChoice = GivenChoiceRequest(task: task, candidates: candidates, date: date)
+        } else {
+            markGivenOrDone(task, at: date)
+        }
+    }
+
+    /// Resolve a raised `givenChoice` with the nurse's pick. Choosing the current (overdue)
+    /// occurrence is the default resolution; choosing a LATER occurrence records the leapt-over
+    /// overdue dose as `.missedAcknowledged` so it never vanishes, then completes the later one.
+    func resolveGiven(_ request: GivenChoiceRequest, chosen: SchedulingEngine.GivenCandidate) {
+        givenChoice = nil
+        let task = request.task
+        if chosen.time == task.nextDueAt {
+            markGivenOrDone(task, at: request.date)
+        } else {
+            markGivenResolvingLater(task, chosen: chosen.time, at: request.date)
+        }
+    }
+
+    /// Complete a LATER fixed-times occurrence than the current overdue pointer (item 2b): the
+    /// overdue occurrence is recorded `.missedAcknowledged` (logged, never silently dropped), the
+    /// chosen dose is recorded given/done, and `nextDueAt` advances past the chosen occurrence.
+    private func markGivenResolvingLater(_ task: CareTask, chosen: Date, at date: Date) {
+        guard !task.scheduleType.isNeedsRepair else { return }
+        if let overdue = task.nextDueAt, overdue < chosen {
+            record(.missedAcknowledged, on: task, at: date, note: "missed — later dose given")
+        }
+        let action: TaskAction = task.kind == .medication ? .given : .done
+        record(action, on: task, at: date)
+        task.lastCompletedAt = date
+        task.nextDueAt = SchedulingEngine.nextDueAfterCompletion(
+            schedule: task.scheduleType, completedAt: date, currentDue: chosen, calendar: calendar)
+        task.explicitSnoozeAt = nil
+        task.updatedAt = date
+        if commit() {
+            acknowledge(givenAckMessage(task, verb: action == .given ? "Given" : "Done"), .success)
         }
     }
 

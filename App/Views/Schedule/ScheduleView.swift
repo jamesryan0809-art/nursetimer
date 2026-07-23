@@ -134,13 +134,20 @@ struct ScheduleView: View {
             ForEach(byPatient) { day in
                 Section(day.label) {
                     ForEach(day.tasks) { line in
-                        Button { openTask(line.id) } label: { PatientTaskRow(line: line) }
-                            .buttonStyle(.plain)
+                        Button { openTask(line.id) } label: {
+                            PatientTaskRow(line: line, occurrences: occurrenceMarks(for: line.id))
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
         }
         .listStyle(.plain)
+    }
+
+    /// Per-occurrence marks for a fixed-times task (feedback pass 4, item 2c), looked up live.
+    private func occurrenceMarks(for taskID: UUID) -> [OccurrenceMark] {
+        tasks.first { $0.id == taskID }?.todayOccurrences() ?? []
     }
 
     /// A projected row taps through to the tap-to-act task sheet (feedback item 1).

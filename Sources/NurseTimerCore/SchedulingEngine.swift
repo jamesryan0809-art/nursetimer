@@ -82,6 +82,47 @@ public enum SchedulingEngine {
         }
     }
 
+    // MARK: Fixed-times "Given" disambiguation (spec §4.1, feedback pass 4 item 2)
+
+    /// One occurrence a fixed-times "Given" could resolve, for the ambiguity chooser (item 2b).
+    public struct GivenCandidate: Equatable, Sendable {
+        public let time: Date
+        public let isOverdue: Bool
+        public init(time: Date, isOverdue: Bool) {
+            self.time = time
+            self.isOverdue = isOverdue
+        }
+    }
+
+    /// Which occurrence(s) a fixed-times Given could plausibly resolve.
+    ///
+    /// Default (no ambiguity): a single candidate, the current occurrence (`currentDue`) — the
+    /// existing single-`nextDueAt` semantics (item 2a).
+    ///
+    /// Ambiguous (item 2b): when the current occurrence is **overdue** (`currentDue < now`) AND
+    /// the completion time has reached the **lead window of the next listed time**
+    /// (`completedAt >= nextTime − lead`), the nurse might be giving the overdue dose late OR the
+    /// next dose early/on-time. The app must ASK, never guess — so this returns two candidates
+    /// `[overdue, next]`. Non-`.fixedTimes` schedules are never ambiguous (always one candidate).
+    public static func fixedGivenCandidates(
+        schedule: ScheduleType,
+        currentDue: Date,
+        completedAt: Date,
+        leadMinutes: Int,
+        now: Date,
+        calendar: Calendar
+    ) -> [GivenCandidate] {
+        let current = GivenCandidate(time: currentDue, isOverdue: currentDue < now)
+        guard case .fixedTimes(let times) = schedule, !times.isEmpty else { return [current] }
+        // Only ambiguous when the current occurrence is already overdue.
+        guard currentDue < now,
+              let nextTime = nextFixedTime(after: currentDue, times: times, calendar: calendar)
+        else { return [current] }
+        let leadWindowStart = nextTime.addingTimeInterval(-Double(max(0, leadMinutes)) * 60)
+        guard completedAt >= leadWindowStart else { return [current] }
+        return [current, GivenCandidate(time: nextTime, isOverdue: nextTime < now)]
+    }
+
     // MARK: Fixed-time resolution (spec §4.1 / §8 midnight crossing)
 
     /// The earliest wall-clock time in `times` that falls strictly after `reference`,

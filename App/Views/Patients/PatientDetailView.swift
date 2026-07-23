@@ -83,10 +83,16 @@ private struct HubTaskRow: View {
     let now: Date
     let settings: AppSettings
 
+    private var occurrences: [OccurrenceMark] { task.todayOccurrences(now: now) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             TaskRowView(task: task, now: now, settings: settings)
-            if !times.isEmpty {
+            // Fixed-times tasks show per-occurrence state (which of 0900/1700/2100 is done);
+            // other schedules fall back to the plain projected-times line (feedback pass 4 item 2c).
+            if !occurrences.isEmpty {
+                OccurrenceMarksView(marks: occurrences).padding(.leading, 22)
+            } else if !times.isEmpty {
                 Text("Today · " + PatientScheduleBuilder.timesText(times))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)

@@ -45,6 +45,9 @@ enum PatientScheduleBuilder {
 /// projection (lighter/italic). Shared by the Schedule tab and the patient-detail hub.
 struct PatientTaskRow: View {
     let line: PatientTaskLine
+    /// Per-occurrence marks for a fixed-times task (feedback pass 4, item 2c); empty otherwise.
+    var occurrences: [OccurrenceMark] = []
+
     var body: some View {
         HStack(spacing: 12) {
             TagBar(tag: line.colorTag, height: 30)
@@ -56,14 +59,20 @@ struct PatientTaskRow: View {
                     Text(line.title + (line.isMedication ? (line.dosage.map { " · \($0)" } ?? "") : ""))
                         .font(.subheadline)
                 }
-                Text(PatientScheduleBuilder.timesText(line.times))
-                    .font(.caption.monospacedDigit())
+                // Fixed-times: show which doses are done; otherwise the plain projected times.
+                if occurrences.isEmpty {
+                    Text(PatientScheduleBuilder.timesText(line.times))
+                        .font(.caption.monospacedDigit())
+                } else {
+                    OccurrenceMarksView(marks: occurrences)
+                }
                 if line.muted { MutedBadge().italic(false) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        // Overdue rows are marked red and NOT dimmed as a projection (feedback item 4).
-        .italic(!line.isOverdue)
+        // Overdue rows are marked red and NOT dimmed as a projection (feedback item 4). The
+        // occurrence marks carry their own per-chip color, so don't tint them here.
+        .italic(!line.isOverdue && occurrences.isEmpty)
         .foregroundStyle(line.isOverdue ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
     }
 }

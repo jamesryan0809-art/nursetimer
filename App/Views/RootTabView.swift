@@ -1,4 +1,5 @@
 import SwiftUI
+import NurseTimerCore
 import NurseTimerModels
 
 /// Bottom tab bar: Board · Schedule · Log (spec §6.1). Hosts the centralized
@@ -40,6 +41,19 @@ struct RootTabView: View {
         } message: {
             Text(reductionAlert?.detail ?? "")
         }
+        // Fixed-times "which dose was given?" chooser (feedback pass 4, item 2b).
+        .confirmationDialog("Which dose was given?",
+                            isPresented: Binding(get: { store.givenChoice != nil },
+                                                 set: { if !$0 { store.givenChoice = nil } }),
+                            titleVisibility: .visible,
+                            presenting: store.givenChoice) { choice in
+            ForEach(choice.candidates, id: \.time) { candidate in
+                Button(candidateLabel(candidate)) { store.resolveGiven(choice, chosen: candidate) }
+            }
+            Button("Cancel", role: .cancel) { store.givenChoice = nil }
+        } message: { _ in
+            Text("An earlier dose is still overdue. Choose which one you just gave — the other stays on the schedule or is logged as missed.")
+        }
         .onChange(of: store.route) { _, route in handle(route) }
         .sheet(item: $store.editRequest) { target in
             NavigationStack { TaskEditView(target: target) }
@@ -55,6 +69,11 @@ struct RootTabView: View {
         .overlay {
             if app.lock.state == .locked { AppLockView() }
         }
+    }
+
+    /// "9:00 AM (overdue)" / "5:00 PM" for the dose chooser (item 2b).
+    private func candidateLabel(_ c: SchedulingEngine.GivenCandidate) -> String {
+        AppTime.short(c.time) + (c.isOverdue ? " (overdue)" : "")
     }
 
     private func handle(_ route: AppRoute?) {

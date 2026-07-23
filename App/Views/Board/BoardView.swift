@@ -229,7 +229,7 @@ private struct TaskSwipeActions: ViewModifier {
             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                 if !task.scheduleType.isNeedsRepair {
                     Button {
-                        store.markGivenOrDone(task)
+                        store.requestGiven(task)   // may raise the fixed-times dose chooser (item 2b)
                     } label: {
                         Label(task.kind == .medication ? "Given" : "Done", systemImage: "checkmark")
                     }.tint(.green)

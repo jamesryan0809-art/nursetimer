@@ -126,7 +126,7 @@ Xcode 16+ must complete each item.
   in App/Watch/Widget plists (installer required it). Confirm all three targets install.
 
 ### Core (already verified where noted)
-- ✅ Swift XCTest suite: **86 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
+- ✅ Swift XCTest suite: **92 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
 - ⬜ SwiftData model-container initialization (`PersistenceController.makeContainer`).
 - ⬜ Store file is `FileProtectionType.complete` at rest.
 - ⬜ CRUD persistence (patients, tasks, events, settings) survives relaunch.
@@ -155,6 +155,13 @@ Xcode 16+ must complete each item.
   lighter/neutral); "now" row highlighted and auto-scrolled into view on open; tap a chip →
   task detail sheet. Confirm header truncation, horizontal + vertical scroll, and now-row anchor
   on a real device with 6+ rooms.
+- ⬜ **Fixed-times dose disambiguation (feedback pass 4, item 2):** with a 0900/1700/2100 med
+  where 0900 is overdue, tap Given near 1700 → a chooser appears ("9:00 AM (overdue) / 5:00 PM").
+  Confirm: picking the overdue completes it and leaves 1700 scheduled; picking 1700 logs the
+  0900 as `.missedAcknowledged` (a record exists — it never vanishes) and advances to 2100.
+  Unambiguous Given (not overdue, or well before the next lead window) does NOT prompt. Verify
+  the per-occurrence display (done struck+checked / pending highlighted / upcoming) on the
+  By-Patient row, task sheet, and patient detail. Core-covered by `SchedulingEngineTests`.
 - ⬜ **Delete task (feedback pass 4, item 1):** task sheet + Edit screen both offer a
   confirmed, destructive Delete; the confirm names task + room and states log history is
   removed (TaskEvent cascade). Confirm pending notifications are canceled (replan) and that

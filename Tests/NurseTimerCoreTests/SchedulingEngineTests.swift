@@ -226,6 +226,72 @@ final class SchedulingEngineTests: XCTestCase {
         XCTAssertTrue(plan.notifications.contains { $0.slot == .due && $0.dueDate == advanced })
     }
 
+    // MARK: Fixed-times Given disambiguation (feedback pass 4, item 2)
+
+    private let fixed3 = ScheduleType.fixedTimes([time(9, 0), time(17, 0), time(21, 0)])
+
+    func test_fixedGiven_notOverdue_singleCandidate() {
+        // Current occurrence is in the future → unambiguous, resolve it.
+        let cal = utcCalendar()
+        let now = dt(cal, 2026, 7, 19, 8, 30)
+        let due = dt(cal, 2026, 7, 19, 9, 0)
+        let c = SchedulingEngine.fixedGivenCandidates(
+            schedule: fixed3, currentDue: due, completedAt: now, leadMinutes: 15, now: now, calendar: cal)
+        XCTAssertEqual(c, [.init(time: due, isOverdue: false)])
+    }
+
+    func test_fixedGiven_overdueButEarly_singleCandidate() {
+        // 0900 overdue; it's only 10:00, nowhere near the 1700 lead window → resolve the overdue.
+        let cal = utcCalendar()
+        let now = dt(cal, 2026, 7, 19, 10, 0)
+        let due = dt(cal, 2026, 7, 19, 9, 0)
+        let c = SchedulingEngine.fixedGivenCandidates(
+            schedule: fixed3, currentDue: due, completedAt: now, leadMinutes: 15, now: now, calendar: cal)
+        XCTAssertEqual(c, [.init(time: due, isOverdue: true)])
+    }
+
+    func test_fixedGiven_overdueAndWithinNextLeadWindow_twoCandidates() {
+        // 0900 overdue AND completing at 16:50 (within 1700−15) → ambiguous: [0900 overdue, 1700].
+        let cal = utcCalendar()
+        let now = dt(cal, 2026, 7, 19, 16, 50)
+        let due = dt(cal, 2026, 7, 19, 9, 0)
+        let c = SchedulingEngine.fixedGivenCandidates(
+            schedule: fixed3, currentDue: due, completedAt: now, leadMinutes: 15, now: now, calendar: cal)
+        XCTAssertEqual(c, [.init(time: due, isOverdue: true),
+                           .init(time: dt(cal, 2026, 7, 19, 17, 0), isOverdue: false)])
+    }
+
+    func test_fixedGiven_overdueAndPastNextTime_twoCandidates_nextAlsoOverdue() {
+        // 0900 overdue and it's already 17:10 → both 0900 and 1700 candidates, 1700 now overdue.
+        let cal = utcCalendar()
+        let now = dt(cal, 2026, 7, 19, 17, 10)
+        let due = dt(cal, 2026, 7, 19, 9, 0)
+        let c = SchedulingEngine.fixedGivenCandidates(
+            schedule: fixed3, currentDue: due, completedAt: now, leadMinutes: 15, now: now, calendar: cal)
+        XCTAssertEqual(c, [.init(time: due, isOverdue: true),
+                           .init(time: dt(cal, 2026, 7, 19, 17, 0), isOverdue: true)])
+    }
+
+    func test_fixedGiven_intervalSchedule_neverAmbiguous() {
+        let cal = utcCalendar()
+        let now = dt(cal, 2026, 7, 19, 17, 0)
+        let due = dt(cal, 2026, 7, 19, 9, 0)   // overdue interval anchor
+        let c = SchedulingEngine.fixedGivenCandidates(
+            schedule: everyHr(4), currentDue: due, completedAt: now, leadMinutes: 15, now: now, calendar: cal)
+        XCTAssertEqual(c, [.init(time: due, isOverdue: true)])
+    }
+
+    /// If the LATER dose is chosen, advancing past it uses the existing engine path and lands on
+    /// the next listed time (item 2b): pick 1700 → next due 2100.
+    func test_fixedGiven_choosingLater_advancesPastChosen() {
+        let cal = utcCalendar()
+        let chosen = dt(cal, 2026, 7, 19, 17, 0)
+        let completedAt = dt(cal, 2026, 7, 19, 16, 50)
+        let next = SchedulingEngine.nextDueAfterCompletion(
+            schedule: fixed3, completedAt: completedAt, currentDue: chosen, calendar: cal)
+        XCTAssertEqual(next, dt(cal, 2026, 7, 19, 21, 0))
+    }
+
     // MARK: DST (spec §8)
 
     func test_interval_acrossSpringForward_isAbsoluteOffset() {
