@@ -234,6 +234,11 @@ Xcode 16+ must complete each item.
   format, mixed-kind digests say "tasks", privacy OFF is unchanged, and (Verify-on-Mac)
   **watch-side tap-through detail remains sample-data until the sync milestone** — the watch
   inherits the redacted phone notification automatically but its in-app detail is still stubbed.
+- ⬜ **Near-due creation note (feedback pass 5, item 3):** create a task whose first due minus
+  the lead is already past (e.g. interval 30 min with a 30-min lead, or a fixed time <30 min
+  away) → the schedule preview shows "Due <time> · too soon for a <N>-min early reminder — first
+  alert at due time". Confirm it appears live as the schedule/lead change, and is suppressed when
+  the task is muted.
 - ⬜ **Adjustable first reminder (feedback pass 3, item 1):** interval schedule + last-given
   blank → the "First reminder" preview is an editable DatePicker defaulting to now+interval and
   live-updating with the interval until touched. Saving sets `nextDueAt` directly (synthetic

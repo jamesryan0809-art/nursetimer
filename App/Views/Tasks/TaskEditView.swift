@@ -102,7 +102,8 @@ struct TaskEditView: View {
 
             SchedulePickerView(draft: $draft, requireSelection: target.isRepair,
                                lastGiven: setLastGiven ? lastGiven : nil,
-                               firstReminder: $firstReminder, firstReminderCustom: $firstReminderCustom)
+                               firstReminder: $firstReminder, firstReminderCustom: $firstReminderCustom,
+                               leadMinutes: notificationsEnabled ? leadMinutes : 0)
 
             if draft.mode == .prn && kind != .reminder {
                 Section {

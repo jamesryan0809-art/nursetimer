@@ -16,9 +16,35 @@ struct SchedulePickerView: View {
     /// Whether the nurse has manually adjusted `firstReminder`. While false it tracks the
     /// computed now+interval default; once true it's held and passed through on save.
     @Binding var firstReminderCustom: Bool
+    /// Effective lead minutes for this task (0 when notifications are muted) — drives the
+    /// "too soon for an early reminder" preview note (feedback pass 5, item 3).
+    var leadMinutes: Int
 
     /// The interval + no-last-given case, where the first reminder is nurse-adjustable.
     private var firstReminderEditable: Bool { draft.mode == .interval && lastGiven == nil }
+
+    /// The due time the first pre-alert would key off, across all modes.
+    private var effectiveFirstDue: Date? {
+        let cal = Calendar.autoupdatingCurrent
+        if firstReminderEditable { return firstReminder }
+        switch draft.mode {
+        case .interval:
+            guard draft.intervalIsValid, let s = draft.scheduleType else { return nil }
+            return SchedulingEngine.firstDue(for: s, anchor: lastGiven ?? .now, calendar: cal)
+        case .fixed:
+            guard let s = draft.scheduleType else { return nil }
+            return SchedulingEngine.firstDue(for: s, anchor: .now, calendar: cal)
+        case .once:  return draft.onceDate
+        case .prn, .none: return nil
+        }
+    }
+
+    /// True when `due − lead` is already in the past, so the planner will skip the pre-alert and
+    /// only the due-time alert fires (the item-1b case). Made visible, never silent (item 3).
+    private var preAlertSkipped: Bool {
+        guard leadMinutes > 0, let due = effectiveFirstDue else { return false }
+        return due.addingTimeInterval(-Double(leadMinutes) * 60) <= Date.now
+    }
 
     var body: some View {
         Section("Schedule") {
@@ -64,6 +90,14 @@ struct SchedulePickerView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .accessibilityLabel("\(preview.label): \(preview.value)")
+            }
+
+            // A skipped pre-alert is visible intent, never silent (feedback pass 5, item 3).
+            if preAlertSkipped, let due = effectiveFirstDue {
+                Label("Due \(AppTime.short(due)) · too soon for a \(leadMinutes)-min early reminder — first alert at due time",
+                      systemImage: "clock.badge.exclamationmark")
+                    .font(.footnote).foregroundStyle(.orange)
+                    .accessibilityLabel("Too soon for a \(leadMinutes) minute early reminder; the first alert is at the due time, \(AppTime.short(due))")
             }
         }
         // When the mode first becomes interval+no-last-given, seed the default now+interval.
