@@ -6,10 +6,14 @@ import Foundation
 // NotificationPlanner operate on. The SwiftData @Model classes (NurseTimerModels)
 // map onto `SchedulableTask` — the tested code never sees SwiftData.
 
-/// Two kinds of care task, one model. Mirrors spec §3.2.
+/// Kinds of care task, one model. Mirrors spec §3.2. `.reminder` (feedback pass 4, item 3) is a
+/// non-clinical per-patient reminder (e.g. "call family", "chart check"); it schedules exactly
+/// like `.generic` and only differs in notification wording and where it groups in the UI. Raw
+/// values are stable/additive so existing stores migrate cleanly (unknown → `.generic`).
 public enum TaskKind: String, Codable, Equatable, Hashable, Sendable {
     case medication
     case generic
+    case reminder
 }
 
 /// A validated recurrence interval, stored as **minutes** so sub-hour cadences

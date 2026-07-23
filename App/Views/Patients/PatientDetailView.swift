@@ -1,4 +1,5 @@
 import SwiftUI
+import NurseTimerCore
 import NurseTimerModels
 
 /// Patient detail — the working hub (spec §6.2). Primary Add Medication / Add Task, the
@@ -13,9 +14,11 @@ struct PatientDetailView: View {
 
     private var settings: AppSettings { store.settings() }
 
-    /// The patient's tasks laid out chronologically for the day (PRN / no-due last).
-    private var chronologicalTasks: [CareTask] {
-        patient.tasks.sorted { ($0.nextDueAt ?? .distantFuture) < ($1.nextDueAt ?? .distantFuture) }
+    /// The patient's tasks of one kind, laid out chronologically for the day (PRN / no-due last).
+    private func tasks(of kind: TaskKind) -> [CareTask] {
+        patient.tasks
+            .filter { $0.kind == kind }
+            .sorted { ($0.nextDueAt ?? .distantFuture) < ($1.nextDueAt ?? .distantFuture) }
     }
 
     /// Projected times per task, from the shared projector (no duplicated projection logic).
@@ -33,20 +36,18 @@ struct PatientDetailView: View {
                 Button { store.editRequest = .add(patient, .generic) } label: {
                     Label("Add Task", systemImage: "checklist")
                 }
+                Button { store.editRequest = .add(patient, .reminder) } label: {
+                    Label("Add Reminder", systemImage: "bell.badge")
+                }
             }
 
-            Section("Today") {
-                if patient.tasks.isEmpty {
-                    Text("No medications or tasks yet.").foregroundStyle(.secondary)
-                }
-                ForEach(chronologicalTasks) { task in
-                    Button { store.taskDetailRequest = .init(task: task) } label: {
-                        HubTaskRow(task: task, times: timesByTask[task.id] ?? [], now: .now, settings: settings)
-                    }
-                    .buttonStyle(.plain)
-                    .taskSwipeActions(task: task, store: store)
-                }
+            if patient.tasks.isEmpty {
+                Section { Text("No medications, tasks, or reminders yet.").foregroundStyle(.secondary) }
             }
+            // Grouped by kind; Reminders at the bottom (feedback pass 4, item 3).
+            taskSection("Medications", kind: .medication)
+            taskSection("Care tasks", kind: .generic)
+            taskSection("Reminders", kind: .reminder)
 
             if let notes = patient.notes, !notes.isEmpty {
                 Section("Notes") { Text(notes) }
@@ -71,6 +72,23 @@ struct PatientDetailView: View {
                             isPresented: $confirmingDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) { store.deletePatient(patient); dismiss() }
             Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    /// A kind-grouped section of task rows, rendered only when the patient has tasks of that kind.
+    @ViewBuilder
+    private func taskSection(_ title: String, kind: TaskKind) -> some View {
+        let items = tasks(of: kind)
+        if !items.isEmpty {
+            Section(title) {
+                ForEach(items) { task in
+                    Button { store.taskDetailRequest = .init(task: task) } label: {
+                        HubTaskRow(task: task, times: timesByTask[task.id] ?? [], now: .now, settings: settings)
+                    }
+                    .buttonStyle(.plain)
+                    .taskSwipeActions(task: task, store: store)
+                }
+            }
         }
     }
 }

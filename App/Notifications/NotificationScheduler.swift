@@ -175,17 +175,21 @@ final class NotificationScheduler: NotificationScheduling {
     private func titleLine(_ d: TaskDisplay?) -> String {
         guard let d else { return "Task due" }
         if privacyMode { return "\(kindNoun(d.kind, capitalized: true)) due · Rm \(d.room)" }
+        // Reminders name the kind up front so a glanced alert reads as non-clinical (item 3).
+        if d.kind == .reminder { return "Reminder · \(d.title) · Rm \(d.room)" }
         return "Rm \(d.room) · \(d.title)"
     }
 
-    /// "Medication" / "Care" (singular) or "medications" / "care tasks" (plural). Kind is the
-    /// only clinical-ish token allowed in redacted content (spec §6.3, feedback item 3).
+    /// "Medication" / "Care" / "Reminder" (singular) or their plurals. Kind is the only
+    /// clinical-ish token allowed in redacted content (spec §6.3, feedback item 3).
     private func kindNoun(_ kind: TaskKind, capitalized: Bool = false, plural: Bool = false) -> String {
         switch (kind, plural) {
         case (.medication, false): return capitalized ? "Medication" : "medication"
         case (.medication, true):  return "medications"
         case (.generic, false):    return capitalized ? "Care" : "care task"
         case (.generic, true):     return "care tasks"
+        case (.reminder, false):   return capitalized ? "Reminder" : "reminder"
+        case (.reminder, true):    return "reminders"
         }
     }
 
@@ -198,6 +202,7 @@ final class NotificationScheduler: NotificationScheduling {
         let noun: String
         if kinds == [.medication] { noun = kindNoun(.medication, plural: count != 1) }
         else if kinds == [.generic] { noun = kindNoun(.generic, plural: count != 1) }
+        else if kinds == [.reminder] { noun = kindNoun(.reminder, plural: count != 1) }
         else { noun = count == 1 ? "task" : "tasks" }   // mixed kinds
         let verb = digest.category == .overdue ? "overdue" : "due"
         let roomSuffix: String

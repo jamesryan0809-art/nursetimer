@@ -51,6 +51,14 @@ struct TaskEditView: View {
     /// The task being edited, for the Delete action (feedback pass 4, item 1); nil for add/repair.
     private var editingTask: CareTask? { if case .edit(let t) = target { return t }; return nil }
 
+    private var titlePlaceholder: String {
+        switch kind {
+        case .medication: return "Medication name"
+        case .generic:    return "Task label"
+        case .reminder:   return "Reminder (e.g. call family)"
+        }
+    }
+
     private var canSave: Bool {
         !title.trimmingCharacters(in: .whitespaces).isEmpty
             && draft.scheduleType != nil
@@ -75,11 +83,12 @@ struct TaskEditView: View {
                 Picker("Type", selection: $kind) {
                     Text("Medication").tag(TaskKind.medication)
                     Text("Care task").tag(TaskKind.generic)
+                    Text("Reminder").tag(TaskKind.reminder)
                 }.pickerStyle(.segmented)
             }
 
             Section("Title") {
-                TextField(kind == .medication ? "Medication name" : "Task label", text: $title)
+                TextField(titlePlaceholder, text: $title)
                 if kind == .generic {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack {
@@ -95,7 +104,7 @@ struct TaskEditView: View {
                                lastGiven: setLastGiven ? lastGiven : nil,
                                firstReminder: $firstReminder, firstReminderCustom: $firstReminderCustom)
 
-            if draft.mode == .prn {
+            if draft.mode == .prn && kind != .reminder {
                 Section {
                     TextField("e.g. every 4–6 hrs as needed", text: $prnFrequency, axis: .vertical)
                 } header: {

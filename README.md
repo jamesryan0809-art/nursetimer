@@ -126,7 +126,7 @@ Xcode 16+ must complete each item.
   in App/Watch/Widget plists (installer required it). Confirm all three targets install.
 
 ### Core (already verified where noted)
-- ✅ Swift XCTest suite: **92 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
+- ✅ Swift XCTest suite: **96 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
 - ⬜ SwiftData model-container initialization (`PersistenceController.makeContainer`).
 - ⬜ Store file is `FileProtectionType.complete` at rest.
 - ⬜ CRUD persistence (patients, tasks, events, settings) survives relaunch.
@@ -155,6 +155,11 @@ Xcode 16+ must complete each item.
   lighter/neutral); "now" row highlighted and auto-scrolled into view on open; tap a chip →
   task detail sheet. Confirm header truncation, horizontal + vertical scroll, and now-row anchor
   on a real device with 6+ rooms.
+- ⬜ **Reminder task kind (feedback pass 4, item 3):** Add/Edit picker has Medication / Care
+  task / Reminder; Reminder hides dosage/route/PRN-frequency and schedules like a care task.
+  Patient detail groups Medications → Care tasks → Reminders (reminders last). Notifications
+  read "Reminder · [name] · Rm X" (privacy ON: "Reminder due · Rm X"). Migration-safe raw value.
+  Core-covered by `TaskKindTests`.
 - ⬜ **Fixed-times dose disambiguation (feedback pass 4, item 2):** with a 0900/1700/2100 med
   where 0900 is overdue, tap Given near 1700 → a chooser appears ("9:00 AM (overdue) / 5:00 PM").
   Confirm: picking the overdue completes it and leaves 1700 scheduled; picking 1700 logs the
