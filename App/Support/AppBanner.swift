@@ -46,20 +46,30 @@ struct ActionAck: Identifiable, Equatable {
 /// (which obstructed controls). This state drives a one-time-per-change alert and a persistent,
 /// tappable nav-bar indicator instead. All tasks remain on the board regardless.
 struct ReductionState: Equatable {
-    var isActive = false
+    /// Early (pre-due) reminders were dropped — the workflow-critical class, called out
+    /// specifically (feedback pass 5, item 4).
+    var preAlertsTrimmed = false
     var coalesced = false
     var groupCount = 0
-    var trimmed = false
+    /// Taper repeat-pings were shortened (not surfaced on its own — the nurse still keeps the
+    /// pre-alert, due alert, and the 5-ping floor).
+    var tailsTrimmed = false
 
-    var headline: String { "Reminders adjusted" }
+    /// Surfaced only for reductions a nurse would care about: a dropped early reminder or
+    /// grouped alerts. Tail-only trimming is not surfaced.
+    var isActive: Bool { preAlertsTrimmed || coalesced }
+
+    var headline: String {
+        preAlertsTrimmed ? "Early reminders trimmed" : "Reminders grouped"
+    }
 
     var detail: String {
-        var parts: [String] = []
-        if coalesced {
-            parts.append("\(groupCount) reminder group\(groupCount == 1 ? "" : "s") combined")
+        if preAlertsTrimmed {
+            // The specific, discoverable message: a nurse relying on a 30-min ping must be able
+            // to learn it was dropped (item 4).
+            return "Some early reminders were trimmed to stay within iOS notification limits. Every task is still on your board and its due-time alert still fires — only the early heads-up was dropped, furthest-out doses first."
         }
-        if trimmed { parts.append("some early reminders trimmed") }
-        let what = parts.isEmpty ? "some reminders were reduced" : parts.joined(separator: " and ")
-        return "Many tasks are scheduled, so \(what) to stay under the reminder limit. Every task is still on your board — only the ping timing was adjusted."
+        let groups = "\(groupCount) reminder group\(groupCount == 1 ? "" : "s")"
+        return "Many tasks are scheduled, so \(groups) were combined to stay under the iOS notification limit. Every task is still on your board; early reminders and due alerts are unaffected."
     }
 }

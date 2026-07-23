@@ -509,14 +509,14 @@ final class NurseStore {
         let displays = Dictionary(tasks.map { ($0.id, TaskDisplay(task: $0)) }, uniquingKeysWith: { a, _ in a })
         tasksNeedingRepair = Set(plan.tasksNeedingRepair)
         lastPlanWasCoalesced = plan.planWasCoalesced
-        // Feedback item 2: reduction is no longer a top-of-screen banner (it obstructed
-        // controls). It now drives a non-blocking, one-time-per-change alert plus a persistent
-        // nav-bar indicator, via `reduction`. Persistence errors keep the banner + their priority.
+        // Feedback item 2: reduction is a non-blocking indicator, not a top banner. Pass 5 item 4:
+        // it surfaces specifically when EARLY reminders were dropped (the workflow-critical class)
+        // or when alerts were grouped — tail-only trimming isn't surfaced (pre/due/floor intact).
         reduction = ReductionState(
-            isActive: plan.planWasReduced,
+            preAlertsTrimmed: plan.reduction.preAlertsTrimmed > 0,
             coalesced: plan.planWasCoalesced,
             groupCount: plan.coalescedGroupCount,
-            trimmed: plan.wasTrimmed)
+            tailsTrimmed: plan.reduction.chainDepthReduced > 0)
         scheduler.apply(plan: plan, displays: displays)
     }
 
