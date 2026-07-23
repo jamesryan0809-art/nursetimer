@@ -126,7 +126,7 @@ Xcode 16+ must complete each item.
   in App/Watch/Widget plists (installer required it). Confirm all three targets install.
 
 ### Core (already verified where noted)
-- ✅ Swift XCTest suite: **96 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
+- ✅ Swift XCTest suite: **99 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
 - ⬜ SwiftData model-container initialization (`PersistenceController.makeContainer`).
 - ⬜ Store file is `FileProtectionType.complete` at rest.
 - ⬜ CRUD persistence (patients, tasks, events, settings) survives relaunch.
@@ -155,6 +155,14 @@ Xcode 16+ must complete each item.
   lighter/neutral); "now" row highlighted and auto-scrolled into view on open; tap a chip →
   task detail sheet. Confirm header truncation, horizontal + vertical scroll, and now-row anchor
   on a real device with 6+ rooms.
+- ⬜ **Undo from the Log (feedback pass 4, item 4):** the most-recent undoable event per task
+  shows Undo (swipe + inline button); Given/Done, Skip, Pause, Resume undoable — Snooze,
+  Missed-ack, Undone are not. Confirm undo restores the task's prior state exactly (snapshot,
+  not recomputed), fires the "Undone · next due …" haptic+toast, keeps the original event
+  (struck through) and adds an `.undone` entry, and that Undo disappears once a newer event
+  exists or the task is deleted. Events created before this update (nil snapshot) offer no Undo.
+  `TaskEvent` snapshot fields + `.resumed`/`.undone` are migration-safe; Core-covered by
+  `TaskActionTests`.
 - ⬜ **Reminder task kind (feedback pass 4, item 3):** Add/Edit picker has Medication / Care
   task / Reminder; Reminder hides dosage/route/PRN-frequency and schedules like a care task.
   Patient detail groups Medications → Care tasks → Reminders (reminders last). Notifications

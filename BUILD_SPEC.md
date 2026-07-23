@@ -182,6 +182,8 @@ App lock (Face ID / passcode), notification redaction in privacy mode, local-onl
 
 - **Schedule-repair surfacing [fail-loud-decode]:** on detecting a `.needsRepair` task, the app fires a local notification ("A task's schedule couldn't be loaded — tap to fix") using a **deterministic per-task identifier** (`NotificationPlanner.repairWarningIdentifier(taskID:)`) so re-detection **replaces** the existing warning rather than duplicating it. Once the task is repaired it drops out of `tasksNeedingRepair` and its pending warning is removed. Tapping the warning (or the pinned Board row) opens the Edit form per §6.2's repair flow.
 
+- **Undo from the Log (design pass, feedback pass 4 item 4).** Each `TaskEvent` captures a snapshot at action time (`previousNextDueAt`, `previousLastCompletedAt`, `previousIsPaused`, `previousExplicitSnoozeAt` — additive/migration-safe). The Log offers **Undo** (swipe + inline button) on a task's **most-recent** event, valid only while it's still the latest event, the task still exists, and a snapshot was captured. Undo **restores the snapshot exactly** (no recomputed guesses), replans, and does **not** delete the original — it marks it **reverted** (struck through in the Log) and records a `.undone` event referencing it, so the shift log stays a truthful history of mistakes and corrections. Undoable: Given/Done, Skip, Pause, **Resume** (Resume is now logged as `.resumed`). Undo of Delete is **not** supported (deletion is warned, item 1). A haptic + "Undone · next due …" toast confirms, sourced from post-commit state. Core adds `.resumed` + `.undone` TaskActions (tested).
+
 ### 6.4 Shift Review flow / 6.5 Overdue & missed handling — as v1.0.
 
 ---

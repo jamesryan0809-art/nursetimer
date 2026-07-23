@@ -120,6 +120,13 @@ public enum TaskAction: String, Codable, Equatable, Hashable, Sendable {
     case missedAcknowledged
     /// The task was explicitly held via the in-app Pause action.
     case paused
+    /// The task was resumed from a paused state (feedback pass 4, item 4) — logged so Resume is
+    /// visible and undoable like the other lifecycle actions.
+    case resumed
+    /// A prior event was undone from the Log (feedback pass 4, item 4). The originating event is
+    /// marked reverted (kept, not deleted) and this event references it, so the shift log stays a
+    /// truthful history including corrections.
+    case undone
 }
 
 /// The read-only surface the scheduler needs from a task. The SwiftData model

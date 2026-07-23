@@ -2,9 +2,11 @@ import SwiftUI
 import SwiftData
 import NurseTimerModels
 
-/// Log tab (spec §6.2): reverse-chronological TaskEvents, filterable by patient.
-/// No export in this pass.
+/// Log tab (spec §6.2): reverse-chronological TaskEvents, filterable by patient. The most
+/// recent undoable event per task offers Undo (swipe + inline button); undone events remain,
+/// struck through (feedback pass 4, item 4). No export in this pass.
 struct LogView: View {
+    @Environment(NurseStore.self) private var store
     @Query(sort: \TaskEvent.timestamp, order: .reverse) private var events: [TaskEvent]
     @Query private var patients: [Patient]
     @State private var patientFilter: UUID?
@@ -21,8 +23,19 @@ struct LogView: View {
                     ContentUnavailableView("No history yet", systemImage: "list.bullet.rectangle",
                                            description: Text("Given, snoozed, and skipped actions appear here."))
                 } else {
-                    List(filtered) { event in LogRow(event: event) }
-                        .listStyle(.plain)
+                    List {
+                        ForEach(filtered) { event in
+                            LogRow(event: event, canUndo: store.canUndo(event)) { store.undo(event) }
+                                .swipeActions(edge: .trailing) {
+                                    if store.canUndo(event) {
+                                        Button { store.undo(event) } label: {
+                                            Label("Undo", systemImage: "arrow.uturn.backward")
+                                        }.tint(.blue)
+                                    }
+                                }
+                        }
+                    }
+                    .listStyle(.plain)
                 }
             }
             .navigationTitle("Log")
@@ -45,18 +58,28 @@ struct LogView: View {
 
 private struct LogRow: View {
     let event: TaskEvent
+    let canUndo: Bool
+    let onUndo: () -> Void
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: symbol).foregroundStyle(color).frame(width: 24)
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(.subheadline)
+                    .strikethrough(event.reverted, color: .secondary)   // undone events stay, struck
                 if let note = event.note, !note.isEmpty {
                     Text(note).font(.caption).foregroundStyle(.secondary)
                 }
             }
             Spacer()
-            Text(AppTime.dateTime(event.timestamp))
-                .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(AppTime.dateTime(event.timestamp))
+                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                if canUndo {
+                    Button(action: onUndo) { Label("Undo", systemImage: "arrow.uturn.backward") }
+                        .font(.caption).buttonStyle(.bordered).tint(.blue)
+                }
+            }
         }
     }
 
@@ -69,6 +92,7 @@ private struct LogRow: View {
         switch event.action {
         case .given: "Given"; case .done: "Done"; case .skipped: "Skipped"
         case .snoozed: "Snoozed"; case .missedAcknowledged: "Missed (ack)"; case .paused: "Paused"
+        case .resumed: "Resumed"; case .undone: "Undone"
         }
     }
     private var symbol: String {
@@ -78,6 +102,8 @@ private struct LogRow: View {
         case .snoozed: "zzz"
         case .missedAcknowledged: "exclamationmark.circle.fill"
         case .paused: "pause.circle.fill"
+        case .resumed: "play.circle.fill"
+        case .undone: "arrow.uturn.backward.circle.fill"
         }
     }
     private var color: Color {
@@ -87,6 +113,8 @@ private struct LogRow: View {
         case .snoozed: .indigo
         case .missedAcknowledged: .orange
         case .paused: .gray
+        case .resumed: .green
+        case .undone: .blue
         }
     }
 }

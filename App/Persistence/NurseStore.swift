@@ -237,15 +237,17 @@ final class NurseStore {
     /// the source, and cancel its pending notifications (replan excludes paused tasks).
     /// Always confirmed in the UI.
     func pause(_ task: CareTask, source: String, at date: Date = .now) {
+        record(.paused, on: task, at: date, note: source)   // capture pre-state FIRST (item 4)
         task.isPaused = true
         task.explicitSnoozeAt = nil
-        record(.paused, on: task, at: date, note: source)
         task.updatedAt = date
         if commit() { acknowledge("Paused — no reminders", .warning) }
     }
 
-    /// Resume (and other non-event pause toggles).
+    /// Resume (and other non-event pause toggles). Resume is logged (`.resumed`) so it's visible
+    /// and undoable like the other lifecycle actions (feedback pass 4, item 4).
     func setPaused(_ task: CareTask, _ paused: Bool) {
+        record(paused ? .paused : .resumed, on: task, at: .now)   // capture pre-state FIRST
         task.isPaused = paused
         task.updatedAt = .now
         if commit() {
@@ -268,6 +270,55 @@ final class NurseStore {
     func acknowledgeMissed(_ task: CareTask, at date: Date = .now) {
         record(.missedAcknowledged, on: task, at: date)
         commit()
+    }
+
+    // MARK: Undo from the Log (feedback pass 4, item 4)
+
+    /// Which actions can be undone: the state-changing lifecycle actions. `.snoozed`,
+    /// `.missedAcknowledged`, and `.undone` are not undoable.
+    func isUndoable(_ event: TaskEvent) -> Bool {
+        switch event.action {
+        case .given, .done, .skipped, .paused, .resumed: return true
+        case .snoozed, .missedAcknowledged, .undone:     return false
+        }
+    }
+
+    /// Whether the Log should offer Undo for this event: undoable, not already reverted, its
+    /// task still exists, its undo snapshot was captured (events predating this feature have
+    /// none — `previousIsPaused` is the sentinel, always set on new events), AND it is still that
+    /// task's most recent event.
+    func canUndo(_ event: TaskEvent) -> Bool {
+        guard let task = event.task, isUndoable(event), !event.reverted,
+              event.previousIsPaused != nil else { return false }
+        return isLatestEvent(event, for: task)
+    }
+
+    private func isLatestEvent(_ event: TaskEvent, for task: CareTask) -> Bool {
+        !task.history.contains { $0.timestamp > event.timestamp }
+    }
+
+    /// Undo a log event: restore the captured snapshot EXACTLY (no recomputed guesses), mark the
+    /// original event reverted (kept in the log, struck through — never deleted), record a
+    /// `.undone` event referencing it, and replan. The shift log stays a truthful history of
+    /// mistakes and corrections.
+    func undo(_ event: TaskEvent) {
+        guard canUndo(event), let task = event.task else { return }
+        task.nextDueAt = event.previousNextDueAt
+        task.lastCompletedAt = event.previousLastCompletedAt
+        if let wasPaused = event.previousIsPaused { task.isPaused = wasPaused }
+        task.explicitSnoozeAt = event.previousExplicitSnoozeAt
+        task.updatedAt = .now
+
+        event.reverted = true
+        let undoneEvent = TaskEvent(taskID: task.id, action: .undone, timestamp: .now,
+                                    note: "undo of \(event.action.rawValue)")
+        undoneEvent.revertsEventID = event.id
+        undoneEvent.task = task
+        context.insert(undoneEvent)
+
+        if commit() {
+            acknowledge(task.nextDueAt.map { "Undone · next due \(AppTime.short($0))" } ?? "Undone", .success)
+        }
     }
 
     /// Apply a nurse-selected repair: fresh valid schedule + fresh nextDueAt, and
@@ -293,8 +344,14 @@ final class NurseStore {
         return "\(verb) · Rm \(room)"
     }
 
+    /// Record a log event. ALWAYS called BEFORE the task is mutated, so it captures the
+    /// pre-action snapshot the Log needs to undo the action exactly (feedback pass 4, item 4).
     private func record(_ action: TaskAction, on task: CareTask, at date: Date, note: String? = nil) {
         let event = TaskEvent(taskID: task.id, action: action, timestamp: date, note: note)
+        event.previousNextDueAt = task.nextDueAt
+        event.previousLastCompletedAt = task.lastCompletedAt
+        event.previousIsPaused = task.isPaused
+        event.previousExplicitSnoozeAt = task.explicitSnoozeAt
         event.task = task
         context.insert(event)
     }

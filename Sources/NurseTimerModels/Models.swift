@@ -184,6 +184,21 @@ public final class TaskEvent {
     public var timestamp: Date
     public var note: String?
 
+    // Undo snapshot (feedback pass 4, item 4). Captured at action time so an undo restores the
+    // task's prior state EXACTLY (no recomputed guesses). All property-level defaults, so they
+    // migrate into an existing store cleanly.
+    public var previousNextDueAt: Date?
+    public var previousLastCompletedAt: Date?
+    /// Prior `isPaused` (needed to undo Pause/Resume and the `.once` auto-pause). nil = not
+    /// captured (older events / non-undoable records).
+    public var previousIsPaused: Bool? = nil
+    /// Prior `explicitSnoozeAt` (given/skip/pause clear it; restore it exactly on undo).
+    public var previousExplicitSnoozeAt: Date? = nil
+    /// True once this event has been undone — kept in the log (struck through), never deleted.
+    public var reverted: Bool = false
+    /// For a `.undone` event: the id of the original event it reverts.
+    public var revertsEventID: UUID? = nil
+
     public var task: CareTask?
 
     public init(
