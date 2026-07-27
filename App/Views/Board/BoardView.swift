@@ -185,7 +185,9 @@ struct BoardView: View {
 
     private func orderedTasks(for patient: Patient) -> [CareTask] {
         patient.tasks
-            .filter { !$0.isArchived }   // archived ("deleted") tasks are off the Board (pass 5, item 2)
+            // Archived ("deleted", pass 5 item 2) and completed terminal tasks (completed once /
+            // done reminder, pass 5 item 3) leave the Board; the latter move to Completed today.
+            .filter { !$0.isArchived && !$0.isCompletedTerminal }
             .sorted { lhs, rhs in
                 // Overdue/needsRepair first, then by due time; PRN/paused last.
                 let a = status(of: lhs, now: now, settings: settings)
@@ -209,7 +211,7 @@ private struct PatientCardHeader: View {
     }
 
     private var summary: String {
-        let active = patient.tasks.filter { !$0.isArchived }
+        let active = patient.tasks.filter { !$0.isArchived && !$0.isCompletedTerminal }
         let n = active.count
         let count = "\(n) task\(n == 1 ? "" : "s")"
         if let soonest = active.compactMap({ $0.isPaused ? nil : $0.nextDueAt }).min() {

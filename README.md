@@ -126,7 +126,7 @@ Xcode 16+ must complete each item.
   in App/Watch/Widget plists (installer required it). Confirm all three targets install.
 
 ### Core (already verified where noted)
-- ✅ Swift XCTest suite: **106 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
+- ✅ Swift XCTest suite: **109 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
 - ⬜ SwiftData model-container initialization (`PersistenceController.makeContainer`).
 - ⬜ Store file is `FileProtectionType.complete` at rest.
 - ⬜ CRUD persistence (patients, tasks, events, settings) survives relaunch.
@@ -179,6 +179,12 @@ Xcode 16+ must complete each item.
   collapsed-by-default "Completed today (N)" disclosure beneath the task sections, listing
   today's given/done/skipped occurrences (action + time) from TaskEvents; count in the header,
   nothing persisted, reverted (undone) items excluded, expanded state remembered for the session.
+- ⬜ **Completed once ≠ Paused (feedback pass 5, item 3):** complete a one-time task → it leaves
+  the active med/task lists (Board + patient detail), shows the green "Done" treatment, and
+  appears in "Completed today"; it must NEVER render as Paused. A once **paused before
+  completing** stays active-Paused. A done unscheduled reminder behaves the same (leaves the
+  "No time" checklist → Completed today). Core-covered by `SchedulingEngineTests`
+  (`isCompletedTerminal`).
 - ⬜ **Unscheduled reminders (feedback pass 5, item 1):** add a Reminder → picker defaults to
   "No schedule"; save with no time. Confirm it shows under patient-detail "Reminders · no time"
   AND on the Board under the patient card (user decision; not on Schedule); status reads

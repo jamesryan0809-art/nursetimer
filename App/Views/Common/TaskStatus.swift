@@ -12,6 +12,7 @@ enum TaskStatus {
     case paused
     case prn          // no automatic schedule (as-needed medication)
     case unscheduled  // no schedule at all — a checklist reminder (feedback pass 5, item 1)
+    case completed    // a terminal task that's done — completed once / done reminder (item 3)
 
     var color: Color {
         switch self {
@@ -22,6 +23,7 @@ enum TaskStatus {
         case .paused:      return .secondary
         case .prn:         return .secondary
         case .unscheduled: return .secondary
+        case .completed:   return .green   // spec §7 "green done"
         }
     }
 
@@ -31,6 +33,9 @@ enum TaskStatus {
 @MainActor
 func status(of task: CareTask, now: Date, settings: AppSettings) -> TaskStatus {
     if task.scheduleType.isNeedsRepair { return .needsRepair }
+    // A completed terminal task reads as done, before the paused/unscheduled checks so a
+    // resolved once never lingers as "Paused" (feedback pass 5, item 3).
+    if task.isCompletedTerminal { return .completed }
     if task.isPaused { return .paused }
     if task.isUnscheduled { return .unscheduled }
     guard let due = task.nextDueAt else { return .prn }

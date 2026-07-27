@@ -142,7 +142,8 @@ final class NurseStore {
         task.lastCompletedAt = date
         task.nextDueAt = SchedulingEngine.nextDueAfterCompletion(
             schedule: schedule, completedAt: date, currentDue: occurrenceDue, calendar: calendar)
-        if SchedulingEngine.shouldAutoPauseAfterCompletion(schedule) { task.isPaused = true }
+        // A completed once (nextDueAt now nil) reads as COMPLETED, not Paused (feedback pass 5,
+        // item 3) — so we no longer auto-pause it. `isCompletedTerminal` derives the done state.
         task.explicitSnoozeAt = nil
         task.updatedAt = date
         // Acknowledge only on persisted success; the string is read from the post-commit
@@ -229,7 +230,7 @@ final class NurseStore {
         let schedule = task.scheduleType
         task.nextDueAt = SchedulingEngine.nextDueAfterCompletion(
             schedule: schedule, completedAt: date, currentDue: task.nextDueAt, calendar: calendar)
-        if SchedulingEngine.shouldAutoPauseAfterCompletion(schedule) { task.isPaused = true }
+        // A skipped once (nextDueAt now nil) is completed/resolved, not Paused (pass 5, item 3).
         task.explicitSnoozeAt = nil
         task.updatedAt = date
         if commit() {

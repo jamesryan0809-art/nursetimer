@@ -18,7 +18,9 @@ struct PatientDetailView: View {
     /// Archived ("deleted") tasks are excluded (feedback pass 5, item 2).
     private func tasks(of kind: TaskKind) -> [CareTask] {
         patient.tasks
-            .filter { $0.kind == kind && !$0.isArchived }
+            // Exclude archived (pass 5 item 2) and completed terminal tasks (completed once /
+            // done reminder, pass 5 item 3 — they move to Completed today).
+            .filter { $0.kind == kind && !$0.isArchived && !$0.isCompletedTerminal }
             .sorted { ($0.nextDueAt ?? .distantFuture) < ($1.nextDueAt ?? .distantFuture) }
     }
 

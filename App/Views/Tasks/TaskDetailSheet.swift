@@ -106,6 +106,7 @@ struct TaskDetailSheet: View {
         case .paused:      return "Paused"
         case .prn:         return "PRN · as needed"
         case .unscheduled: return "No schedule"
+        case .completed:   return "Completed"
         default:           return DueText.string(for: task.nextDueAt, now: .now)
         }
     }

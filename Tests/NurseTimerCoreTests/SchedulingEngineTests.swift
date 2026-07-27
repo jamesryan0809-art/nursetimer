@@ -83,6 +83,37 @@ final class SchedulingEngineTests: XCTestCase {
             schedule: .prn, completedAt: dt(cal, 2026, 7, 19, 12, 0), calendar: cal))
     }
 
+    // MARK: Terminal completion — completed once / done unscheduled (feedback pass 5, item 3)
+
+    func test_isCompletedTerminal_once() {
+        let cal = utcCalendar()
+        let fireAt = dt(cal, 2026, 7, 19, 10, 0)
+        // Resolved once (given/skipped cleared nextDueAt) → completed.
+        XCTAssertTrue(SchedulingEngine.isCompletedTerminal(
+            schedule: .once(fireAt), nextDueAt: nil, lastCompletedAt: fireAt))
+        XCTAssertTrue(SchedulingEngine.isCompletedTerminal(
+            schedule: .once(fireAt), nextDueAt: nil, lastCompletedAt: nil))   // skipped once
+        // Once still awaiting its time (or paused before completing) → NOT completed.
+        XCTAssertFalse(SchedulingEngine.isCompletedTerminal(
+            schedule: .once(fireAt), nextDueAt: fireAt, lastCompletedAt: nil))
+    }
+
+    func test_isCompletedTerminal_unscheduled() {
+        let cal = utcCalendar()
+        // Done scheduleless reminder (has a completion) → completed; not-done → active.
+        XCTAssertTrue(SchedulingEngine.isCompletedTerminal(
+            schedule: .unscheduled, nextDueAt: nil, lastCompletedAt: dt(cal, 2026, 7, 19, 9, 0)))
+        XCTAssertFalse(SchedulingEngine.isCompletedTerminal(
+            schedule: .unscheduled, nextDueAt: nil, lastCompletedAt: nil))
+    }
+
+    func test_isCompletedTerminal_recurringNeverTerminal() {
+        for s in [everyHr(4), .fixedTimes([time(9, 0)]), .prn] as [ScheduleType] {
+            XCTAssertFalse(SchedulingEngine.isCompletedTerminal(
+                schedule: s, nextDueAt: nil, lastCompletedAt: Date()))
+        }
+    }
+
     // MARK: Effective overrides (spec §3.2 / §3.4)
 
     func test_effectiveLeadAndSnooze_useOverrideThenDefault() {

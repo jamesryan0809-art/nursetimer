@@ -172,6 +172,14 @@ extension CareTask {
     /// reminder rendered as a checklist item.
     public var isUnscheduled: Bool { if case .unscheduled = scheduleType { return true }; return false }
 
+    /// True when a terminal task is done — a completed one-time task or a done unscheduled
+    /// reminder (feedback pass 5, item 3). Such a task leaves the active lists and reads as
+    /// completed, never Paused. Derived from existing state (no new persisted field).
+    public var isCompletedTerminal: Bool {
+        SchedulingEngine.isCompletedTerminal(
+            schedule: scheduleType, nextDueAt: nextDueAt, lastCompletedAt: lastCompletedAt)
+    }
+
     /// Apply a nurse-selected repair: set a new valid schedule and establish a FRESH
     /// `nextDueAt` from `anchor` (last-given time, or now). Clears the repair state
     /// (the schedule is valid again) and never reuses the old, untrusted `nextDueAt`

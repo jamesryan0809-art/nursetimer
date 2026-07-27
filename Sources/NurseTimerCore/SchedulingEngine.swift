@@ -57,9 +57,30 @@ public enum SchedulingEngine {
     }
 
     /// A `.once` task holds itself after firing (spec §4.1).
+    ///
+    /// NOTE (feedback pass 5, item 3): the app no longer auto-*pauses* a completed once — it
+    /// treats it as **completed** (`isCompletedTerminal`) so it reads as done, not Paused. This
+    /// predicate remains as the "does this schedule terminate on completion" fact.
     public static func shouldAutoPauseAfterCompletion(_ schedule: ScheduleType) -> Bool {
         if case .once = schedule { return true }
         return false
+    }
+
+    /// True when a **terminal** schedule has been resolved — a completed one-time task or a
+    /// done scheduleless reminder (feedback pass 5, item 3). Such a task leaves the active lists
+    /// and reads as completed (never Paused). Derived from existing state, nothing new persisted:
+    /// - `.once`: resolved once its `nextDueAt` is nil (given or skipped both clear it; a once
+    ///   still awaiting its time, or paused before completing, keeps a non-nil `nextDueAt`).
+    /// - `.unscheduled`: resolved once it has a `lastCompletedAt` (a "Done" tap).
+    /// Recurring schedules are never terminal.
+    public static func isCompletedTerminal(
+        schedule: ScheduleType, nextDueAt: Date?, lastCompletedAt: Date?
+    ) -> Bool {
+        switch schedule {
+        case .once:        return nextDueAt == nil
+        case .unscheduled: return lastCompletedAt != nil
+        case .interval, .fixedTimes, .prn, .needsRepair: return false
+        }
     }
 
     /// The **initial** `nextDueAt` for a freshly-set or just-repaired schedule,
