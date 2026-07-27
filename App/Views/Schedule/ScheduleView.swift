@@ -34,9 +34,16 @@ struct ScheduleView: View {
         ScheduleProjector.occurrences(for: activeTasks, from: .now, calendar: .autoupdatingCurrent)
     }
 
+    /// Unresolved overdue occurrences (feedback item 4), pinned atop By-Time and marked in
+    /// every mode until given/skipped.
+    private var overdueOccurrences: [ScheduleOccurrence] {
+        occurrences.filter { $0.isOverdue }.sorted { $0.date < $1.date }
+    }
+
     private var byHour: [(bucket: Date, label: String, items: [ScheduleOccurrence])] {
         let cal = Calendar.autoupdatingCurrent
-        let groups = Dictionary(grouping: occurrences) { occ -> Date in
+        // Overdue occurrences are shown in their own pinned section, not the hourly buckets.
+        let groups = Dictionary(grouping: occurrences.filter { !$0.isOverdue }) { occ -> Date in
             var c = cal.dateComponents([.year, .month, .day, .hour], from: occ.date)
             c.minute = 0; c.second = 0
             return cal.date(from: c) ?? occ.date
@@ -96,6 +103,17 @@ struct ScheduleView: View {
 
     private var byTimeList: some View {
         List {
+            if !overdueOccurrences.isEmpty {
+                Section {
+                    ForEach(overdueOccurrences) { occ in
+                        Button { openTask(occ.taskID) } label: { OccurrenceRow(occ: occ) }
+                            .buttonStyle(.plain)
+                    }
+                } header: {
+                    Label("Overdue", systemImage: "exclamationmark.triangle.fill")
+                        .font(.headline).foregroundStyle(.red)
+                }
+            }
             ForEach(byHour, id: \.bucket) { group in
                 Section {
                     if isCluster(group.items) { ClusterBadge(items: group.items) }
@@ -116,13 +134,20 @@ struct ScheduleView: View {
             ForEach(byPatient) { day in
                 Section(day.label) {
                     ForEach(day.tasks) { line in
-                        Button { openTask(line.id) } label: { PatientTaskRow(line: line) }
-                            .buttonStyle(.plain)
+                        Button { openTask(line.id) } label: {
+                            PatientTaskRow(line: line, occurrences: occurrenceMarks(for: line.id))
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
         }
         .listStyle(.plain)
+    }
+
+    /// Per-occurrence marks for a fixed-times task (feedback pass 4, item 2c), looked up live.
+    private func occurrenceMarks(for taskID: UUID) -> [OccurrenceMark] {
+        tasks.first { $0.id == taskID }?.todayOccurrences() ?? []
     }
 
     /// A projected row taps through to the tap-to-act task sheet (feedback item 1).
@@ -151,21 +176,21 @@ private struct OccurrenceRow: View {
     var body: some View {
         HStack(spacing: 12) {
             TagBar(tag: tag, height: 24)
-            Text(AppTime.short(occ.date))
+            Text(occ.isOverdue ? "\(AppTime.short(occ.date)) · overdue" : AppTime.short(occ.date))
                 .font(.subheadline.monospacedDigit())
-                .frame(width: 64, alignment: .leading)
+                .frame(width: occ.isOverdue ? 140 : 64, alignment: .leading)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Rm \(occ.room) · \(occ.title)").font(.subheadline)
                 if let dosage = occ.dosage, occ.isMedication {
-                    Text(dosage).font(.caption).foregroundStyle(.secondary)
+                    Text(dosage).font(.caption).foregroundStyle(occ.isOverdue ? AnyShapeStyle(.red.opacity(0.8)) : AnyShapeStyle(.secondary))
                 }
                 if occ.muted { MutedBadge().italic(false) }
             }
             Spacer()
         }
-        // Projections are rendered lighter/italic to distinguish from actual events.
-        .italic()
-        .foregroundStyle(.secondary)
+        // Overdue rows are red and NOT dimmed; other projections stay lighter/italic (item 4).
+        .italic(!occ.isOverdue)
+        .foregroundStyle(occ.isOverdue ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
     }
 }
 

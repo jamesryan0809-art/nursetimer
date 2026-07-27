@@ -4,6 +4,14 @@ import SwiftData
 import NurseTimerCore
 import NurseTimerModels
 
+/// A pending "which dose was given?" disambiguation for a fixed-times task (feedback pass 4,
+/// item 2b). Carries the task, the candidate occurrences, and the completion time.
+struct GivenChoiceRequest {
+    let task: CareTask
+    let candidates: [SchedulingEngine.GivenCandidate]
+    let date: Date
+}
+
 /// The application-data layer: the single place that mutates persistence, keeps
 /// `nextDueAt` in sync with Core's scheduling engine, and re-runs the
 /// `NotificationPlanner` after every relevant change.
@@ -23,6 +31,22 @@ final class NurseStore {
     var tasksNeedingRepair: Set<UUID> = []
     /// Whether the last plan coalesced/trimmed to fit the budget (drives the banner).
     var lastPlanWasCoalesced = false
+    /// Non-blocking reduction indicator state (feedback item 2). Replaces the top-of-screen
+    /// reduction banner: a one-time-per-change alert plus a persistent nav-bar indicator read
+    /// this instead. Persistence-error banners are unaffected and keep their priority.
+    var reduction = ReductionState()
+    /// The most recent successful action's confirmation (feedback micro-pass). Set only after a
+    /// persisted commit; the UI observes it to fire a haptic + brief toast. Read from
+    /// post-commit state so the "next due" string is the actual recomputed value.
+    var acknowledgment: ActionAck?
+    /// A pending fixed-times "which dose was given?" choice (feedback pass 4, item 2b). Set by
+    /// `requestGiven` when the completion is ambiguous; the root presents a chooser and calls
+    /// `resolveGiven`. Nil when there's nothing to disambiguate.
+    var givenChoice: GivenChoiceRequest?
+    /// Patient IDs whose "Completed today" section is expanded (feedback pass 4, item 5). Held
+    /// in memory so the choice is remembered for the app session (collapsed by default); not
+    /// persisted.
+    var completedExpandedPatients: Set<UUID> = []
     /// Deep-link intent from a notification tap (root view observes it).
     var route: AppRoute?
     /// Centralized Add/Edit/Repair task presentation (root presents the sheet).
@@ -103,17 +127,83 @@ final class NurseStore {
 
     // MARK: Task lifecycle
 
+    /// Given/Done is valid at ANY time (early, on time, or late) and always records the actual
+    /// completion time. It completes the current upcoming occurrence and advances the schedule
+    /// per Core's anchoring rules; passing `currentDue` lets fixed-time schedules advance past
+    /// an EARLY completion instead of re-resolving to the same occurrence (feedback item 5).
+    /// The subsequent `commit()`→`replan()` cancels this occurrence's pending pre/due/taper
+    /// notifications (cancel-all-then-reschedule from the new `nextDueAt`).
     func markGivenOrDone(_ task: CareTask, at date: Date = .now, note: String? = nil) {
         guard !task.scheduleType.isNeedsRepair else { return }
         let action: TaskAction = task.kind == .medication ? .given : .done
         record(action, on: task, at: date, note: note)
-        task.lastCompletedAt = date
         let schedule = task.scheduleType
-        task.nextDueAt = SchedulingEngine.nextDueAfterCompletion(schedule: schedule, completedAt: date, calendar: calendar)
+        let occurrenceDue = task.nextDueAt
+        task.lastCompletedAt = date
+        task.nextDueAt = SchedulingEngine.nextDueAfterCompletion(
+            schedule: schedule, completedAt: date, currentDue: occurrenceDue, calendar: calendar)
         if SchedulingEngine.shouldAutoPauseAfterCompletion(schedule) { task.isPaused = true }
         task.explicitSnoozeAt = nil
         task.updatedAt = date
-        commit()
+        // Acknowledge only on persisted success; the string is read from the post-commit
+        // nextDueAt (feedback micro-pass). On save failure the error banner shows, no toast.
+        if commit() {
+            let verb = action == .given ? "Given" : "Done"
+            acknowledge(givenAckMessage(task, verb: verb), .success)
+        }
+    }
+
+    /// Interactive "Given" entry point (feedback pass 4, item 2b). For a fixed-times task whose
+    /// current occurrence is overdue AND whose completion time has reached the next listed dose's
+    /// lead window, this is AMBIGUOUS — raise a chooser (`givenChoice`) instead of guessing.
+    /// Otherwise it completes the current occurrence (the default single-`nextDueAt` behavior).
+    /// Notification/background Given keeps calling `markGivenOrDone` directly (no UI to ask).
+    func requestGiven(_ task: CareTask, at date: Date = .now) {
+        guard !task.scheduleType.isNeedsRepair, let due = task.nextDueAt else {
+            markGivenOrDone(task, at: date); return
+        }
+        let lead = task.leadTimeMinutes ?? settings().defaultLeadTimeMinutes
+        let candidates = SchedulingEngine.fixedGivenCandidates(
+            schedule: task.scheduleType, currentDue: due, completedAt: date,
+            leadMinutes: lead, now: .now, calendar: calendar)
+        if candidates.count > 1 {
+            givenChoice = GivenChoiceRequest(task: task, candidates: candidates, date: date)
+        } else {
+            markGivenOrDone(task, at: date)
+        }
+    }
+
+    /// Resolve a raised `givenChoice` with the nurse's pick. Choosing the current (overdue)
+    /// occurrence is the default resolution; choosing a LATER occurrence records the leapt-over
+    /// overdue dose as `.missedAcknowledged` so it never vanishes, then completes the later one.
+    func resolveGiven(_ request: GivenChoiceRequest, chosen: SchedulingEngine.GivenCandidate) {
+        givenChoice = nil
+        let task = request.task
+        if chosen.time == task.nextDueAt {
+            markGivenOrDone(task, at: request.date)
+        } else {
+            markGivenResolvingLater(task, chosen: chosen.time, at: request.date)
+        }
+    }
+
+    /// Complete a LATER fixed-times occurrence than the current overdue pointer (item 2b): the
+    /// overdue occurrence is recorded `.missedAcknowledged` (logged, never silently dropped), the
+    /// chosen dose is recorded given/done, and `nextDueAt` advances past the chosen occurrence.
+    private func markGivenResolvingLater(_ task: CareTask, chosen: Date, at date: Date) {
+        guard !task.scheduleType.isNeedsRepair else { return }
+        if let overdue = task.nextDueAt, overdue < chosen {
+            record(.missedAcknowledged, on: task, at: date, note: "missed — later dose given")
+        }
+        let action: TaskAction = task.kind == .medication ? .given : .done
+        record(action, on: task, at: date)
+        task.lastCompletedAt = date
+        task.nextDueAt = SchedulingEngine.nextDueAfterCompletion(
+            schedule: task.scheduleType, completedAt: date, currentDue: chosen, calendar: calendar)
+        task.explicitSnoozeAt = nil
+        task.updatedAt = date
+        if commit() {
+            acknowledge(givenAckMessage(task, verb: action == .given ? "Given" : "Done"), .success)
+        }
     }
 
     /// Re-ping chain re-anchors to now via `explicitSnoozeAt`; `nextDueAt` is unchanged
@@ -123,7 +213,11 @@ final class NurseStore {
         record(.snoozed, on: task, at: date)
         task.explicitSnoozeAt = date
         task.updatedAt = date
-        commit()
+        if commit() {
+            let snoozeMin = task.snoozeMinutes ?? settings().defaultSnoozeMinutes
+            let reping = date.addingTimeInterval(Double(snoozeMin) * 60)
+            acknowledge("Snoozed · re-ping \(AppTime.short(reping))", .light)
+        }
     }
 
     /// Skip Once: advance the schedule one occurrence without recording an
@@ -133,29 +227,40 @@ final class NurseStore {
         guard !task.scheduleType.isNeedsRepair else { return }
         record(.skipped, on: task, at: date, note: source)
         let schedule = task.scheduleType
-        task.nextDueAt = SchedulingEngine.nextDueAfterCompletion(schedule: schedule, completedAt: date, calendar: calendar)
+        task.nextDueAt = SchedulingEngine.nextDueAfterCompletion(
+            schedule: schedule, completedAt: date, currentDue: task.nextDueAt, calendar: calendar)
         if SchedulingEngine.shouldAutoPauseAfterCompletion(schedule) { task.isPaused = true }
         task.explicitSnoozeAt = nil
         task.updatedAt = date
-        commit()
+        if commit() {
+            acknowledge(task.nextDueAt.map { "Skipped · next due \(AppTime.short($0))" } ?? "Skipped", .warning)
+        }
     }
 
     /// Pause: hold the task (no reminders until resumed), record a `.paused` event with
     /// the source, and cancel its pending notifications (replan excludes paused tasks).
     /// Always confirmed in the UI.
     func pause(_ task: CareTask, source: String, at date: Date = .now) {
+        record(.paused, on: task, at: date, note: source)   // capture pre-state FIRST (item 4)
         task.isPaused = true
         task.explicitSnoozeAt = nil
-        record(.paused, on: task, at: date, note: source)
         task.updatedAt = date
-        commit()
+        if commit() { acknowledge("Paused — no reminders", .warning) }
     }
 
-    /// Resume (and other non-event pause toggles).
+    /// Resume (and other non-event pause toggles). Resume is logged (`.resumed`) so it's visible
+    /// and undoable like the other lifecycle actions (feedback pass 4, item 4).
     func setPaused(_ task: CareTask, _ paused: Bool) {
+        record(paused ? .paused : .resumed, on: task, at: .now)   // capture pre-state FIRST
         task.isPaused = paused
         task.updatedAt = .now
-        commit()
+        if commit() {
+            if paused {
+                acknowledge("Paused — no reminders", .warning)
+            } else {
+                acknowledge(task.nextDueAt.map { "Resumed · next due \(AppTime.short($0))" } ?? "Resumed", .success)
+            }
+        }
     }
 
     /// Mute / unmute a task's reminders (feedback item 2). The planner excludes muted tasks
@@ -171,6 +276,55 @@ final class NurseStore {
         commit()
     }
 
+    // MARK: Undo from the Log (feedback pass 4, item 4)
+
+    /// Which actions can be undone: the state-changing lifecycle actions. `.snoozed`,
+    /// `.missedAcknowledged`, and `.undone` are not undoable.
+    func isUndoable(_ event: TaskEvent) -> Bool {
+        switch event.action {
+        case .given, .done, .skipped, .paused, .resumed: return true
+        case .snoozed, .missedAcknowledged, .undone:     return false
+        }
+    }
+
+    /// Whether the Log should offer Undo for this event: undoable, not already reverted, its
+    /// task still exists, its undo snapshot was captured (events predating this feature have
+    /// none — `previousIsPaused` is the sentinel, always set on new events), AND it is still that
+    /// task's most recent event.
+    func canUndo(_ event: TaskEvent) -> Bool {
+        guard let task = event.task, isUndoable(event), !event.reverted,
+              event.previousIsPaused != nil else { return false }
+        return isLatestEvent(event, for: task)
+    }
+
+    private func isLatestEvent(_ event: TaskEvent, for task: CareTask) -> Bool {
+        !task.history.contains { $0.timestamp > event.timestamp }
+    }
+
+    /// Undo a log event: restore the captured snapshot EXACTLY (no recomputed guesses), mark the
+    /// original event reverted (kept in the log, struck through — never deleted), record a
+    /// `.undone` event referencing it, and replan. The shift log stays a truthful history of
+    /// mistakes and corrections.
+    func undo(_ event: TaskEvent) {
+        guard canUndo(event), let task = event.task else { return }
+        task.nextDueAt = event.previousNextDueAt
+        task.lastCompletedAt = event.previousLastCompletedAt
+        if let wasPaused = event.previousIsPaused { task.isPaused = wasPaused }
+        task.explicitSnoozeAt = event.previousExplicitSnoozeAt
+        task.updatedAt = .now
+
+        event.reverted = true
+        let undoneEvent = TaskEvent(taskID: task.id, action: .undone, timestamp: .now,
+                                    note: "undo of \(event.action.rawValue)")
+        undoneEvent.revertsEventID = event.id
+        undoneEvent.task = task
+        context.insert(undoneEvent)
+
+        if commit() {
+            acknowledge(task.nextDueAt.map { "Undone · next due \(AppTime.short($0))" } ?? "Undone", .success)
+        }
+    }
+
     /// Apply a nurse-selected repair: fresh valid schedule + fresh nextDueAt, and
     /// remove the task's pending repair warning (spec §6.2/§6.3).
     func repair(_ task: CareTask, with schedule: ScheduleType, anchor: Date) {
@@ -179,8 +333,29 @@ final class NurseStore {
         commit()
     }
 
+    // MARK: Action acknowledgment (feedback micro-pass)
+
+    private func acknowledge(_ message: String, _ style: ActionAck.Style) {
+        acknowledgment = ActionAck(message: message, style: style)
+    }
+
+    /// Confirmation string for Given/Done, read from post-commit state: the recomputed next-due
+    /// for recurring schedules; room (+ "last given updated" for PRN) when there's no next due.
+    private func givenAckMessage(_ task: CareTask, verb: String) -> String {
+        if let due = task.nextDueAt { return "\(verb) · next due \(AppTime.short(due))" }
+        let room = task.patient?.roomNumber ?? "?"
+        if task.isPRN { return "\(verb) · Rm \(room) · last given updated" }
+        return "\(verb) · Rm \(room)"
+    }
+
+    /// Record a log event. ALWAYS called BEFORE the task is mutated, so it captures the
+    /// pre-action snapshot the Log needs to undo the action exactly (feedback pass 4, item 4).
     private func record(_ action: TaskAction, on task: CareTask, at date: Date, note: String? = nil) {
         let event = TaskEvent(taskID: task.id, action: action, timestamp: date, note: note)
+        event.previousNextDueAt = task.nextDueAt
+        event.previousLastCompletedAt = task.lastCompletedAt
+        event.previousIsPaused = task.isPaused
+        event.previousExplicitSnoozeAt = task.explicitSnoozeAt
         event.task = task
         context.insert(event)
     }
@@ -223,18 +398,23 @@ final class NurseStore {
 
     // MARK: Task CRUD
 
+    /// `firstDueOverride` (feedback item 1): when set, it becomes the initial `nextDueAt`
+    /// directly — a synthetic first-due the nurse chose (interval + no last-given case). It
+    /// does NOT fabricate a `lastCompletedAt`; no administration event is invented. Subsequent
+    /// dosing follows normal interval math from actual given times.
     @discardableResult
     func addTask(to patient: Patient, kind: TaskKind, title: String, dosage: String?, route: String?,
                  schedule: ScheduleType, lastGiven: Date?, leadTimeMinutes: Int?, snoozeMinutes: Int?,
                  colorTag: TaskColorTag = .none, notificationsEnabled: Bool = true,
-                 prnFrequencyText: String = "") -> CareTask {
+                 prnFrequencyText: String = "", firstDueOverride: Date? = nil) -> CareTask {
         let task = CareTask(kind: kind, title: title, dosage: dosage, route: route,
                             scheduleType: schedule, leadTimeMinutes: leadTimeMinutes, snoozeMinutes: snoozeMinutes,
                             colorTagRaw: colorTag.rawValue, notificationsEnabled: notificationsEnabled,
                             prnFrequencyText: prnFrequencyText)
         task.patient = patient
-        task.lastCompletedAt = lastGiven
-        task.nextDueAt = SchedulingEngine.firstDue(for: schedule, anchor: lastGiven ?? .now, calendar: calendar)
+        task.lastCompletedAt = lastGiven   // stays nil when there's no last-given — never fabricated
+        task.nextDueAt = firstDueOverride
+            ?? SchedulingEngine.firstDue(for: schedule, anchor: lastGiven ?? .now, calendar: calendar)
         context.insert(task)
         commit()
         return task
@@ -250,7 +430,7 @@ final class NurseStore {
     func updateTask(_ task: CareTask, kind: TaskKind, title: String, dosage: String?, route: String?,
                     schedule: ScheduleType, lastGiven: Date?, leadTimeMinutes: Int?, snoozeMinutes: Int?,
                     colorTag: TaskColorTag = .none, notificationsEnabled: Bool = true,
-                    prnFrequencyText: String = "") {
+                    prnFrequencyText: String = "", firstDueOverride: Date? = nil) {
         let priorLastGiven = task.lastCompletedAt
         let scheduleChanged = task.scheduleType != schedule
         let anchorChanged = lastGiven != priorLastGiven
@@ -267,7 +447,12 @@ final class NurseStore {
         task.scheduleType = schedule
         task.lastCompletedAt = lastGiven          // always reflect the form (submit or clear)
 
-        if scheduleChanged || anchorChanged {
+        if let firstDueOverride {
+            // Nurse-set synthetic first-due (feedback item 1) — set nextDueAt directly, no
+            // fabricated lastCompletedAt.
+            task.explicitSnoozeAt = nil
+            task.nextDueAt = firstDueOverride
+        } else if scheduleChanged || anchorChanged {
             task.explicitSnoozeAt = nil
             task.nextDueAt = SchedulingEngine.firstDue(for: schedule, anchor: lastGiven ?? .now, calendar: calendar)
         }
@@ -275,10 +460,15 @@ final class NurseStore {
         commit()
     }
 
+    /// Delete a task and its log history (TaskEvent cascade, spec §3.2 relationship). The
+    /// follow-on `commit()`→`replan()` cancels all of the task's pending notifications
+    /// (cancel-all-then-reschedule; the task is gone from `planningTasks`). Not undoable
+    /// (feedback pass 4, items 1 & 4).
     func deleteTask(_ task: CareTask) {
+        let room = task.patient?.roomNumber ?? "?"   // capture before the object is deleted
         scheduler.removeRepairWarning(taskID: task.id)
         context.delete(task)
-        commit()
+        if commit() { acknowledge("Deleted · Rm \(room)", .warning) }
     }
 
     // MARK: Save + replan
@@ -287,16 +477,18 @@ final class NurseStore {
     /// failure, roll back the in-memory mutation (restore last-saved state), surface the
     /// error, and DO NOT replan — existing scheduled notifications are left untouched, so
     /// they never reflect never-persisted state.
-    func commit() {
+    @discardableResult
+    func commit() -> Bool {
         do {
             try context.save()
         } catch {
             AppLog.persistence.error("Save failed: \(error.localizedDescription, privacy: .public)")
             context.rollback()          // discard the failed mutation
             setBanner(.saveFailed)
-            return                      // no replan; scheduler untouched
+            return false                // no replan; scheduler untouched; no success ack
         }
         replan()
+        return true
     }
 
     /// Persist a UI preference (e.g., last-used Schedule mode) WITHOUT replanning —
@@ -317,11 +509,14 @@ final class NurseStore {
         let displays = Dictionary(tasks.map { ($0.id, TaskDisplay(task: $0)) }, uniquingKeysWith: { a, _ in a })
         tasksNeedingRepair = Set(plan.tasksNeedingRepair)
         lastPlanWasCoalesced = plan.planWasCoalesced
-        // Item 10: banner on ANY reduction (pre-alert trim, chain shortening, OR coalescing),
-        // not only grouping. setBanner keeps it from overwriting a visible error banner.
-        if plan.planWasReduced {
-            setBanner(.remindersReduced(coalesced: plan.planWasCoalesced, groupCount: plan.coalescedGroupCount))
-        }
+        // Feedback item 2: reduction is a non-blocking indicator, not a top banner. Pass 5 item 4:
+        // it surfaces specifically when EARLY reminders were dropped (the workflow-critical class)
+        // or when alerts were grouped — tail-only trimming isn't surfaced (pre/due/floor intact).
+        reduction = ReductionState(
+            preAlertsTrimmed: plan.reduction.preAlertsTrimmed > 0,
+            coalesced: plan.planWasCoalesced,
+            groupCount: plan.coalescedGroupCount,
+            tailsTrimmed: plan.reduction.chainDepthReduced > 0)
         scheduler.apply(plan: plan, displays: displays)
     }
 

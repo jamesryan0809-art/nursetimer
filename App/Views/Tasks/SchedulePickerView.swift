@@ -10,6 +10,41 @@ struct SchedulePickerView: View {
     /// The form's current last-given value (nil when the toggle is off) — drives the
     /// first-reminder / next-due preview.
     var lastGiven: Date?
+    /// The editable first-reminder value (feedback item 1). Bound so the nurse can set when
+    /// the FIRST due should be, in the interval + no-last-given case.
+    @Binding var firstReminder: Date
+    /// Whether the nurse has manually adjusted `firstReminder`. While false it tracks the
+    /// computed now+interval default; once true it's held and passed through on save.
+    @Binding var firstReminderCustom: Bool
+    /// Effective lead minutes for this task (0 when notifications are muted) — drives the
+    /// "too soon for an early reminder" preview note (feedback pass 5, item 3).
+    var leadMinutes: Int
+
+    /// The interval + no-last-given case, where the first reminder is nurse-adjustable.
+    private var firstReminderEditable: Bool { draft.mode == .interval && lastGiven == nil }
+
+    /// The due time the first pre-alert would key off, across all modes.
+    private var effectiveFirstDue: Date? {
+        let cal = Calendar.autoupdatingCurrent
+        if firstReminderEditable { return firstReminder }
+        switch draft.mode {
+        case .interval:
+            guard draft.intervalIsValid, let s = draft.scheduleType else { return nil }
+            return SchedulingEngine.firstDue(for: s, anchor: lastGiven ?? .now, calendar: cal)
+        case .fixed:
+            guard let s = draft.scheduleType else { return nil }
+            return SchedulingEngine.firstDue(for: s, anchor: .now, calendar: cal)
+        case .once:  return draft.onceDate
+        case .prn, .none: return nil
+        }
+    }
+
+    /// True when `due − lead` is already in the past, so the planner will skip the pre-alert and
+    /// only the due-time alert fires (the item-1b case). Made visible, never silent (item 3).
+    private var preAlertSkipped: Bool {
+        guard leadMinutes > 0, let due = effectiveFirstDue else { return false }
+        return due.addingTimeInterval(-Double(leadMinutes) * 60) <= Date.now
+    }
 
     var body: some View {
         Section("Schedule") {
@@ -33,15 +68,50 @@ struct SchedulePickerView: View {
             case nil:       Text("A schedule is required.").font(.footnote).foregroundStyle(.red)
             }
 
-            // Live preview of the schedule's consequence, so the "anchor to now"
-            // assumption is never invisible. Computed via the SAME Core path the store
-            // uses (SchedulingEngine.firstDue) — no duplicated date math here.
-            if let preview {
+            if firstReminderEditable {
+                // Editable first reminder (feedback item 1): defaults to the computed
+                // now+interval; the nurse can set when the first due should be. Under the hood
+                // this becomes the initial nextDueAt (a synthetic first-due) — NOT a fake
+                // last-given (see NurseStore.addTask.firstDueOverride).
+                DatePicker("First reminder", selection: Binding(
+                    get: { firstReminder },
+                    set: { firstReminder = $0; firstReminderCustom = true }))
+                    .onChange(of: draft.intervalHours) { _, _ in syncFirstReminder() }
+                    .onChange(of: draft.intervalMinutes) { _, _ in syncFirstReminder() }
+                if firstReminderCustom {
+                    Text("Set manually. Later doses follow the interval from actual given times.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            } else if let preview {
+                // Live preview of the schedule's consequence, so the "anchor to now"
+                // assumption is never invisible. Computed via the SAME Core path the store
+                // uses (SchedulingEngine.firstDue) — no duplicated date math here.
                 LabeledContent(preview.label, value: preview.value)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .accessibilityLabel("\(preview.label): \(preview.value)")
             }
+
+            // A skipped pre-alert is visible intent, never silent (feedback pass 5, item 3).
+            if preAlertSkipped, let due = effectiveFirstDue {
+                Label("Due \(AppTime.short(due)) · too soon for a \(leadMinutes)-min early reminder — first alert at due time",
+                      systemImage: "clock.badge.exclamationmark")
+                    .font(.footnote).foregroundStyle(.orange)
+                    .accessibilityLabel("Too soon for a \(leadMinutes) minute early reminder; the first alert is at the due time, \(AppTime.short(due))")
+            }
+        }
+        // When the mode first becomes interval+no-last-given, seed the default now+interval.
+        // (The initial edit value is seeded in TaskEditView.load so a saved due isn't clobbered.)
+        .onChange(of: firstReminderEditable) { _, editable in if editable { syncFirstReminder() } }
+    }
+
+    /// While the nurse hasn't customized it, keep `firstReminder` equal to the computed
+    /// now+interval first-due so the control's default stays live.
+    private func syncFirstReminder() {
+        guard firstReminderEditable, !firstReminderCustom else { return }
+        if draft.intervalIsValid, let schedule = draft.scheduleType,
+           let due = SchedulingEngine.firstDue(for: schedule, anchor: .now, calendar: .autoupdatingCurrent) {
+            firstReminder = due
         }
     }
 

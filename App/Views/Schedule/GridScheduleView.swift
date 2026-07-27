@@ -26,10 +26,14 @@ struct GridScheduleView: View {
 
     private var nowBlock: Date { hourBlock(now) }
 
-    /// Contiguous 1-hour rows spanning now → the last occurrence (capped).
+    /// Contiguous 1-hour rows spanning (bounded) overdue → now → the last occurrence (capped).
     private var blocks: [Date] {
         let occBlocks = occurrences.map { hourBlock($0.date) }
-        let start = min(nowBlock, occBlocks.min() ?? nowBlock)
+        // Include overdue occurrences above the now row, but clamp the lookback to 24h so a very
+        // stale overdue can't push the now row past the 48-block cap (item 4). Older overdue is
+        // still visible in the By-Time/By-Patient modes.
+        let earliestAllowed = cal.date(byAdding: .hour, value: -24, to: nowBlock) ?? nowBlock
+        let start = max(min(nowBlock, occBlocks.min() ?? nowBlock), earliestAllowed)
         let end = max(nowBlock, occBlocks.max() ?? nowBlock)
         var out: [Date] = []
         var t = start

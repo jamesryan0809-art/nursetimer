@@ -1,4 +1,5 @@
 import SwiftUI
+import NurseTimerCore
 import NurseTimerModels
 
 /// Bottom tab bar: Board · Schedule · Log (spec §6.1). Hosts the centralized
@@ -9,6 +10,8 @@ struct RootTabView: View {
     @AppStorage("disclaimerAcknowledged") private var disclaimerAcknowledged = false
     @State private var selection = 0
     @State private var boardRoomFilter: String?
+    /// The reduction detail to show in the one-time-per-change alert (feedback item 2).
+    @State private var reductionAlert: ReductionState?
 
     var body: some View {
         @Bindable var store = store
@@ -23,7 +26,34 @@ struct RootTabView: View {
                 .tabItem { Label("Log", systemImage: "list.bullet.rectangle") }
                 .tag(2)
         }
+        // Action acknowledgment: haptic + brief bottom toast on every successful action,
+        // across all tabs and surfaces (feedback micro-pass).
+        .actionAcknowledgments()
         .safeAreaInset(edge: .top) { BannerView(banner: $store.banner) }
+        // Reduction is non-blocking now (feedback item 2): a dismissible alert on app open and
+        // when the reduction first becomes true or changes; a persistent nav-bar indicator
+        // (BoardView) lets the nurse re-show details anytime. Cleared when reduction resolves.
+        .onChange(of: store.reduction) { _, new in reductionAlert = new.isActive ? new : nil }
+        .alert(reductionAlert?.headline ?? "Reminders adjusted",
+               isPresented: Binding(get: { reductionAlert != nil },
+                                    set: { if !$0 { reductionAlert = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(reductionAlert?.detail ?? "")
+        }
+        // Fixed-times "which dose was given?" chooser (feedback pass 4, item 2b).
+        .confirmationDialog("Which dose was given?",
+                            isPresented: Binding(get: { store.givenChoice != nil },
+                                                 set: { if !$0 { store.givenChoice = nil } }),
+                            titleVisibility: .visible,
+                            presenting: store.givenChoice) { choice in
+            ForEach(choice.candidates, id: \.time) { candidate in
+                Button(candidateLabel(candidate)) { store.resolveGiven(choice, chosen: candidate) }
+            }
+            Button("Cancel", role: .cancel) { store.givenChoice = nil }
+        } message: { _ in
+            Text("An earlier dose is still overdue. Choose which one you just gave — the other stays on the schedule or is logged as missed.")
+        }
         .onChange(of: store.route) { _, route in handle(route) }
         .sheet(item: $store.editRequest) { target in
             NavigationStack { TaskEditView(target: target) }
@@ -39,6 +69,11 @@ struct RootTabView: View {
         .overlay {
             if app.lock.state == .locked { AppLockView() }
         }
+    }
+
+    /// "9:00 AM (overdue)" / "5:00 PM" for the dose chooser (item 2b).
+    private func candidateLabel(_ c: SchedulingEngine.GivenCandidate) -> String {
+        AppTime.short(c.time) + (c.isOverdue ? " (overdue)" : "")
     }
 
     private func handle(_ route: AppRoute?) {

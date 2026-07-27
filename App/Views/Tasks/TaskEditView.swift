@@ -41,8 +41,23 @@ struct TaskEditView: View {
     @State private var repingMinutes = 3
     @State private var colorTag: TaskColorTag = .none
     @State private var prnFrequency = ""
+    // Adjustable first reminder (feedback item 1) — interval + no-last-given only.
+    @State private var firstReminder = Date.now
+    @State private var firstReminderCustom = false
+    @State private var confirmingDelete = false
 
     private var settings: AppSettings { store.settings() }
+
+    /// The task being edited, for the Delete action (feedback pass 4, item 1); nil for add/repair.
+    private var editingTask: CareTask? { if case .edit(let t) = target { return t }; return nil }
+
+    private var titlePlaceholder: String {
+        switch kind {
+        case .medication: return "Medication name"
+        case .generic:    return "Task label"
+        case .reminder:   return "Reminder (e.g. call family)"
+        }
+    }
 
     private var canSave: Bool {
         !title.trimmingCharacters(in: .whitespaces).isEmpty
@@ -68,11 +83,12 @@ struct TaskEditView: View {
                 Picker("Type", selection: $kind) {
                     Text("Medication").tag(TaskKind.medication)
                     Text("Care task").tag(TaskKind.generic)
+                    Text("Reminder").tag(TaskKind.reminder)
                 }.pickerStyle(.segmented)
             }
 
             Section("Title") {
-                TextField(kind == .medication ? "Medication name" : "Task label", text: $title)
+                TextField(titlePlaceholder, text: $title)
                 if kind == .generic {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack {
@@ -85,9 +101,11 @@ struct TaskEditView: View {
             }
 
             SchedulePickerView(draft: $draft, requireSelection: target.isRepair,
-                               lastGiven: setLastGiven ? lastGiven : nil)
+                               lastGiven: setLastGiven ? lastGiven : nil,
+                               firstReminder: $firstReminder, firstReminderCustom: $firstReminderCustom,
+                               leadMinutes: notificationsEnabled ? leadMinutes : 0)
 
-            if draft.mode == .prn {
+            if draft.mode == .prn && kind != .reminder {
                 Section {
                     TextField("e.g. every 4–6 hrs as needed", text: $prnFrequency, axis: .vertical)
                 } header: {
@@ -115,6 +133,21 @@ struct TaskEditView: View {
                 Text("Color tag")
             } footer: {
                 Text("A visual label to group meds at a glance. Separate from the red/orange/green urgency colors — it never changes how urgent a task looks.")
+            }
+
+            // Delete (feedback pass 4, item 1) — edit only; add/repair have nothing to delete.
+            if let task = editingTask {
+                Section {
+                    Button(role: .destructive) { confirmingDelete = true } label: {
+                        Label("Delete Task", systemImage: "trash").frame(maxWidth: .infinity)
+                    }
+                }
+                .confirmationDialog("Delete this task?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+                    Button("Delete", role: .destructive) { store.deleteTask(task); dismiss() }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Rm \(task.patient?.roomNumber ?? "?") · \(task.title) — this permanently removes the task and its log history, and cancels its reminders. This can't be undone.")
+                }
             }
         }
         .navigationTitle(navTitle)
@@ -179,6 +212,12 @@ struct TaskEditView: View {
                 setLastGiven = false   // fresh anchor for a fresh nextDueAt
             } else {
                 draft = ScheduleDraft.from(task.scheduleType)
+                // Seed the editable first-reminder from the task's actual scheduled first due
+                // (interval + no last-given), so editing shows the real value rather than a
+                // fresh now+interval. Not marked custom, so changing the interval re-defaults it.
+                if draft.mode == .interval, task.lastCompletedAt == nil, let due = task.nextDueAt {
+                    firstReminder = due
+                }
             }
         }
     }
@@ -195,18 +234,24 @@ struct TaskEditView: View {
         let lastGivenValue = setLastGiven ? lastGiven : nil
         // Frequency guidance is only meaningful for PRN; clear it otherwise.
         let freq = draft.mode == .prn ? prnFrequency.trimmingCharacters(in: .whitespacesAndNewlines) : ""
+        // Nurse-adjusted first reminder (feedback item 1): only when interval + no last-given
+        // AND the nurse actually set it — a synthetic first-due, never a fabricated last-given.
+        let firstDueOverride: Date? =
+            (draft.mode == .interval && !setLastGiven && firstReminderCustom) ? firstReminder : nil
 
         switch target {
         case .add(let patient, _):
             store.addTask(to: patient, kind: kind, title: trimmedTitle, dosage: dose, route: rte,
                           schedule: schedule, lastGiven: lastGivenValue,
                           leadTimeMinutes: lead, snoozeMinutes: snooze, colorTag: colorTag,
-                          notificationsEnabled: notificationsEnabled, prnFrequencyText: freq)
+                          notificationsEnabled: notificationsEnabled, prnFrequencyText: freq,
+                          firstDueOverride: firstDueOverride)
         case .edit(let task):
             store.updateTask(task, kind: kind, title: trimmedTitle, dosage: dose, route: rte,
                              schedule: schedule, lastGiven: lastGivenValue,
                              leadTimeMinutes: lead, snoozeMinutes: snooze, colorTag: colorTag,
-                             notificationsEnabled: notificationsEnabled, prnFrequencyText: freq)
+                             notificationsEnabled: notificationsEnabled, prnFrequencyText: freq,
+                             firstDueOverride: firstDueOverride)
         case .repair(let task):
             // Preserve the other edits, then apply the repair with a fresh anchor.
             store.updateTask(task, kind: kind, title: trimmedTitle, dosage: dose, route: rte,

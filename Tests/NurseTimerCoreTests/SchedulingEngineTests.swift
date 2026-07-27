@@ -159,6 +159,139 @@ final class SchedulingEngineTests: XCTestCase {
         XCTAssertTrue(SchedulingEngine.snoozeChain(anchor: now, snoozeMinutes: 0, after: now, count: 20).isEmpty)
     }
 
+    // MARK: Early completion advances past the occurrence (feedback item 5)
+
+    func test_fixedTime_earlyCompletion_advancesPastOccurrence() {
+        // Fixed 09:00 & 21:00; the 09:00 dose given EARLY at 08:30 must advance to 21:00,
+        // NOT re-resolve to 09:00 (which would keep firing the 09:00 due alert).
+        let cal = utcCalendar()
+        let due0900 = dt(cal, 2026, 7, 19, 9, 0)
+        let givenEarly = dt(cal, 2026, 7, 19, 8, 30)
+        let next = SchedulingEngine.nextDueAfterCompletion(
+            schedule: .fixedTimes([time(9, 0), time(21, 0)]),
+            completedAt: givenEarly, currentDue: due0900, calendar: cal)
+        XCTAssertEqual(next, dt(cal, 2026, 7, 19, 21, 0))
+    }
+
+    func test_fixedTime_earlyCompletion_lastOfDay_rollsToTomorrow() {
+        // Giving the 21:00 dose early at 20:30 advances to tomorrow 09:00.
+        let cal = utcCalendar()
+        let due2100 = dt(cal, 2026, 7, 19, 21, 0)
+        let givenEarly = dt(cal, 2026, 7, 19, 20, 30)
+        let next = SchedulingEngine.nextDueAfterCompletion(
+            schedule: .fixedTimes([time(9, 0), time(21, 0)]),
+            completedAt: givenEarly, currentDue: due2100, calendar: cal)
+        XCTAssertEqual(next, dt(cal, 2026, 7, 20, 9, 0))
+    }
+
+    func test_fixedTime_lateCompletion_stillAdvancesFromActualTime() {
+        // Late completion keeps working: 09:00 dose given at 09:15 → next is 21:00.
+        let cal = utcCalendar()
+        let due0900 = dt(cal, 2026, 7, 19, 9, 0)
+        let givenLate = dt(cal, 2026, 7, 19, 9, 15)
+        let next = SchedulingEngine.nextDueAfterCompletion(
+            schedule: .fixedTimes([time(9, 0), time(21, 0)]),
+            completedAt: givenLate, currentDue: due0900, calendar: cal)
+        XCTAssertEqual(next, dt(cal, 2026, 7, 19, 21, 0))
+    }
+
+    func test_interval_earlyCompletion_reanchorsToActualTime() {
+        // Interval unchanged: q4h due in 25 min, given now → next = now + 4h (anchor rule).
+        let cal = utcCalendar()
+        let now = dt(cal, 2026, 7, 19, 12, 0)
+        let due = dt(cal, 2026, 7, 19, 12, 25)
+        let next = SchedulingEngine.nextDueAfterCompletion(
+            schedule: everyHr(4), completedAt: now, currentDue: due, calendar: cal)
+        XCTAssertEqual(next, dt(cal, 2026, 7, 19, 16, 0))
+    }
+
+    /// After an early completion advances `nextDueAt`, a fresh plan schedules the NEW due's
+    /// pre/due and NOT the old occurrence — so replan (cancel-all-then-reschedule) drops the
+    /// old pending due alert (feedback item 5).
+    func test_planner_afterEarlyCompletion_schedulesNewDueNotOld() {
+        // Times chosen so the advanced due stays inside the 12h horizon from `now`.
+        let cal = utcCalendar()
+        let now = dt(cal, 2026, 7, 19, 8, 30)
+        let oldDue = dt(cal, 2026, 7, 19, 9, 0)     // the occurrence given early
+        let schedule: ScheduleType = .fixedTimes([time(9, 0), time(13, 0)])
+        let advanced = SchedulingEngine.nextDueAfterCompletion(
+            schedule: schedule, completedAt: now, currentDue: oldDue, calendar: cal)!
+        XCTAssertEqual(advanced, dt(cal, 2026, 7, 19, 13, 0))
+        let taskID = UUID(uuidString: "00000000-0000-0000-0000-0000000000A5")!
+        let plan = NotificationPlanner.plan(
+            tasks: [TaskSnapshot(id: taskID, scheduleType: schedule, nextDueAt: advanced)],
+            settings: .default, now: now, calendar: cal)
+        // No notification fires at the old 09:00 due; the due alert is at the new 13:00 due.
+        XCTAssertFalse(plan.notifications.contains { $0.dueDate == oldDue })
+        XCTAssertTrue(plan.notifications.contains { $0.slot == .due && $0.dueDate == advanced })
+    }
+
+    // MARK: Fixed-times Given disambiguation (feedback pass 4, item 2)
+
+    private let fixed3 = ScheduleType.fixedTimes([time(9, 0), time(17, 0), time(21, 0)])
+
+    func test_fixedGiven_notOverdue_singleCandidate() {
+        // Current occurrence is in the future → unambiguous, resolve it.
+        let cal = utcCalendar()
+        let now = dt(cal, 2026, 7, 19, 8, 30)
+        let due = dt(cal, 2026, 7, 19, 9, 0)
+        let c = SchedulingEngine.fixedGivenCandidates(
+            schedule: fixed3, currentDue: due, completedAt: now, leadMinutes: 15, now: now, calendar: cal)
+        XCTAssertEqual(c, [.init(time: due, isOverdue: false)])
+    }
+
+    func test_fixedGiven_overdueButEarly_singleCandidate() {
+        // 0900 overdue; it's only 10:00, nowhere near the 1700 lead window → resolve the overdue.
+        let cal = utcCalendar()
+        let now = dt(cal, 2026, 7, 19, 10, 0)
+        let due = dt(cal, 2026, 7, 19, 9, 0)
+        let c = SchedulingEngine.fixedGivenCandidates(
+            schedule: fixed3, currentDue: due, completedAt: now, leadMinutes: 15, now: now, calendar: cal)
+        XCTAssertEqual(c, [.init(time: due, isOverdue: true)])
+    }
+
+    func test_fixedGiven_overdueAndWithinNextLeadWindow_twoCandidates() {
+        // 0900 overdue AND completing at 16:50 (within 1700−15) → ambiguous: [0900 overdue, 1700].
+        let cal = utcCalendar()
+        let now = dt(cal, 2026, 7, 19, 16, 50)
+        let due = dt(cal, 2026, 7, 19, 9, 0)
+        let c = SchedulingEngine.fixedGivenCandidates(
+            schedule: fixed3, currentDue: due, completedAt: now, leadMinutes: 15, now: now, calendar: cal)
+        XCTAssertEqual(c, [.init(time: due, isOverdue: true),
+                           .init(time: dt(cal, 2026, 7, 19, 17, 0), isOverdue: false)])
+    }
+
+    func test_fixedGiven_overdueAndPastNextTime_twoCandidates_nextAlsoOverdue() {
+        // 0900 overdue and it's already 17:10 → both 0900 and 1700 candidates, 1700 now overdue.
+        let cal = utcCalendar()
+        let now = dt(cal, 2026, 7, 19, 17, 10)
+        let due = dt(cal, 2026, 7, 19, 9, 0)
+        let c = SchedulingEngine.fixedGivenCandidates(
+            schedule: fixed3, currentDue: due, completedAt: now, leadMinutes: 15, now: now, calendar: cal)
+        XCTAssertEqual(c, [.init(time: due, isOverdue: true),
+                           .init(time: dt(cal, 2026, 7, 19, 17, 0), isOverdue: true)])
+    }
+
+    func test_fixedGiven_intervalSchedule_neverAmbiguous() {
+        let cal = utcCalendar()
+        let now = dt(cal, 2026, 7, 19, 17, 0)
+        let due = dt(cal, 2026, 7, 19, 9, 0)   // overdue interval anchor
+        let c = SchedulingEngine.fixedGivenCandidates(
+            schedule: everyHr(4), currentDue: due, completedAt: now, leadMinutes: 15, now: now, calendar: cal)
+        XCTAssertEqual(c, [.init(time: due, isOverdue: true)])
+    }
+
+    /// If the LATER dose is chosen, advancing past it uses the existing engine path and lands on
+    /// the next listed time (item 2b): pick 1700 → next due 2100.
+    func test_fixedGiven_choosingLater_advancesPastChosen() {
+        let cal = utcCalendar()
+        let chosen = dt(cal, 2026, 7, 19, 17, 0)
+        let completedAt = dt(cal, 2026, 7, 19, 16, 50)
+        let next = SchedulingEngine.nextDueAfterCompletion(
+            schedule: fixed3, completedAt: completedAt, currentDue: chosen, calendar: cal)
+        XCTAssertEqual(next, dt(cal, 2026, 7, 19, 21, 0))
+    }
+
     // MARK: DST (spec §8)
 
     func test_interval_acrossSpringForward_isAbsoluteOffset() {

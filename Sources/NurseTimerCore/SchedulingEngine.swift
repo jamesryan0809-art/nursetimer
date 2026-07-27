@@ -25,19 +25,25 @@ public enum SchedulingEngine {
     ///
     /// - `.interval`: anchored to the ACTUAL administration time (`completedAt`),
     ///   not the previous scheduled time — avoids drift-stacking (spec §4.1).
-    /// - `.fixedTimes`: the next listed wall-clock time strictly after completion.
+    /// - `.fixedTimes`: the next listed wall-clock time strictly after the occurrence being
+    ///   completed. `currentDue` is that occurrence's own due time; the reference is
+    ///   `max(completedAt, currentDue)` so an EARLY completion (given before the scheduled
+    ///   time) still advances to the NEXT listed time instead of re-resolving to the same one
+    ///   (feedback item 5). When `currentDue` is nil the reference is `completedAt` (legacy).
     /// - `.once`: nil — the task auto-pauses (see `shouldAutoPauseAfterCompletion`).
     /// - `.prn`: nil — never auto-schedules; only `lastCompletedAt` is updated by the caller.
     public static func nextDueAfterCompletion(
         schedule: ScheduleType,
         completedAt: Date,
+        currentDue: Date? = nil,
         calendar: Calendar
     ) -> Date? {
         switch schedule {
         case .interval(let interval):
             return completedAt.addingTimeInterval(interval.timeInterval)
         case .fixedTimes(let times):
-            return nextFixedTime(after: completedAt, times: times, calendar: calendar)
+            let reference = max(completedAt, currentDue ?? completedAt)
+            return nextFixedTime(after: reference, times: times, calendar: calendar)
         case .once:
             return nil
         case .prn:
@@ -74,6 +80,47 @@ public enum SchedulingEngine {
         case .needsRepair:
             return nil
         }
+    }
+
+    // MARK: Fixed-times "Given" disambiguation (spec §4.1, feedback pass 4 item 2)
+
+    /// One occurrence a fixed-times "Given" could resolve, for the ambiguity chooser (item 2b).
+    public struct GivenCandidate: Equatable, Sendable {
+        public let time: Date
+        public let isOverdue: Bool
+        public init(time: Date, isOverdue: Bool) {
+            self.time = time
+            self.isOverdue = isOverdue
+        }
+    }
+
+    /// Which occurrence(s) a fixed-times Given could plausibly resolve.
+    ///
+    /// Default (no ambiguity): a single candidate, the current occurrence (`currentDue`) — the
+    /// existing single-`nextDueAt` semantics (item 2a).
+    ///
+    /// Ambiguous (item 2b): when the current occurrence is **overdue** (`currentDue < now`) AND
+    /// the completion time has reached the **lead window of the next listed time**
+    /// (`completedAt >= nextTime − lead`), the nurse might be giving the overdue dose late OR the
+    /// next dose early/on-time. The app must ASK, never guess — so this returns two candidates
+    /// `[overdue, next]`. Non-`.fixedTimes` schedules are never ambiguous (always one candidate).
+    public static func fixedGivenCandidates(
+        schedule: ScheduleType,
+        currentDue: Date,
+        completedAt: Date,
+        leadMinutes: Int,
+        now: Date,
+        calendar: Calendar
+    ) -> [GivenCandidate] {
+        let current = GivenCandidate(time: currentDue, isOverdue: currentDue < now)
+        guard case .fixedTimes(let times) = schedule, !times.isEmpty else { return [current] }
+        // Only ambiguous when the current occurrence is already overdue.
+        guard currentDue < now,
+              let nextTime = nextFixedTime(after: currentDue, times: times, calendar: calendar)
+        else { return [current] }
+        let leadWindowStart = nextTime.addingTimeInterval(-Double(max(0, leadMinutes)) * 60)
+        guard completedAt >= leadWindowStart else { return [current] }
+        return [current, GivenCandidate(time: nextTime, isOverdue: nextTime < now)]
     }
 
     // MARK: Fixed-time resolution (spec §4.1 / §8 midnight crossing)

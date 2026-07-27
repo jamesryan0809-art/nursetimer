@@ -126,7 +126,7 @@ Xcode 16+ must complete each item.
   in App/Watch/Widget plists (installer required it). Confirm all three targets install.
 
 ### Core (already verified where noted)
-- ✅ Swift XCTest suite: **81 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
+- ✅ Swift XCTest suite: **103 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
 - ⬜ SwiftData model-container initialization (`PersistenceController.makeContainer`).
 - ⬜ Store file is `FileProtectionType.complete` at rest.
 - ⬜ CRUD persistence (patients, tasks, events, settings) survives relaunch.
@@ -155,6 +155,42 @@ Xcode 16+ must complete each item.
   lighter/neutral); "now" row highlighted and auto-scrolled into view on open; tap a chip →
   task detail sheet. Confirm header truncation, horizontal + vertical scroll, and now-row anchor
   on a real device with 6+ rooms.
+- ⬜ **Undo from the Log (feedback pass 4, item 4):** the most-recent undoable event per task
+  shows Undo (swipe + inline button); Given/Done, Skip, Pause, Resume undoable — Snooze,
+  Missed-ack, Undone are not. Confirm undo restores the task's prior state exactly (snapshot,
+  not recomputed), fires the "Undone · next due …" haptic+toast, keeps the original event
+  (struck through) and adds an `.undone` entry, and that Undo disappears once a newer event
+  exists or the task is deleted. Events created before this update (nil snapshot) offer no Undo.
+  `TaskEvent` snapshot fields + `.resumed`/`.undone` are migration-safe; Core-covered by
+  `TaskActionTests`.
+- ⬜ **Reminder task kind (feedback pass 4, item 3):** Add/Edit picker has Medication / Care
+  task / Reminder; Reminder hides dosage/route/PRN-frequency and schedules like a care task.
+  Patient detail groups Medications → Care tasks → Reminders (reminders last). Notifications
+  read "Reminder · [name] · Rm X" (privacy ON: "Reminder due · Rm X"). Migration-safe raw value.
+  Core-covered by `TaskKindTests`.
+- ⬜ **Fixed-times dose disambiguation (feedback pass 4, item 2):** with a 0900/1700/2100 med
+  where 0900 is overdue, tap Given near 1700 → a chooser appears ("9:00 AM (overdue) / 5:00 PM").
+  Confirm: picking the overdue completes it and leaves 1700 scheduled; picking 1700 logs the
+  0900 as `.missedAcknowledged` (a record exists — it never vanishes) and advances to 2100.
+  Unambiguous Given (not overdue, or well before the next lead window) does NOT prompt. Verify
+  the per-occurrence display (done struck+checked / pending highlighted / upcoming) on the
+  By-Patient row, task sheet, and patient detail. Core-covered by `SchedulingEngineTests`.
+- ⬜ **Completed-today section (feedback pass 4, item 5):** patient detail shows a
+  collapsed-by-default "Completed today (N)" disclosure beneath the task sections, listing
+  today's given/done/skipped occurrences (action + time) from TaskEvents; count in the header,
+  nothing persisted, reverted (undone) items excluded, expanded state remembered for the session.
+- ⬜ **Delete task (feedback pass 4, item 1):** task sheet + Edit screen both offer a
+  confirmed, destructive Delete; the confirm names task + room and states log history is
+  removed (TaskEvent cascade). Confirm pending notifications are canceled (replan) and that
+  deleting from the nested Edit screen also closes the task sheet (it checks the task still
+  exists). Patient delete unchanged.
+- ⬜ **Action acknowledgment (feedback micro-pass):** every successful Given/Skip/Snooze/
+  Pause/Resume fires a haptic + a brief bottom toast ("Given · next due 5:07 PM", etc.) read
+  from post-commit state; toast auto-dismisses ~2s, never covers the nav bar or action buttons,
+  and is static under Reduce Motion. Confirm NO toast on a save failure (error banner shows
+  instead), and that the string matches the recomputed next-due. **Haptics are device-only — the
+  simulator won't vibrate, so absence of vibration in the simulator is expected, not a bug;
+  verify haptics on a physical device.**
 - ⬜ **Tap-to-act task detail (design pass, feedback item 1):** tapping any task row (Board,
   patient detail, Schedule By-Time/By-Patient rows, Grid chip) opens a sheet with large
   Given/Done · Snooze · Skip Once · Pause (confirmed) · Edit buttons; paused → Resume;
@@ -178,6 +214,48 @@ Xcode 16+ must complete each item.
   title → schedule (with consequence preview) → PRN frequency (PRN only) → last given → Details
   (dosage, route — med only, at the bottom) → color tag. Confirm the flow reads top-to-bottom
   and that Details/color-tag still save correctly from their new positions.
+- ⬜ **Board sort by room (feedback pass 4, item 6):** Settings → Board → Sort by (Next due /
+  Room ↑ / Room ↓), persisted in `AppSettings.boardSortRaw`. Confirm room sort is numeric-aware
+  (412A, 412B, 1201 order sensibly) and that overdue/needs-repair patients stay pinned at the
+  top under every sort mode.
+- ⬜ **Specific reduction messaging (feedback pass 5, item 4):** when the budget drops
+  pre-alerts, the reduction alert + nav-bar indicator say specifically "Some early reminders
+  were trimmed to stay within iOS notification limits…" (not a generic banner); when only
+  grouping occurs, the grouped-alerts message; and tail-only repeat-ping trimming surfaces
+  NOTHING (pre/due/5-ping floor intact). Confirm a nurse can tap through to learn a 30-min ping
+  was dropped.
+- ⬜ **Non-blocking reduction (feedback pass 3, item 2):** the "many tasks scheduled" reduction
+  no longer sits in the top banner. Confirm it shows as a one-time-per-change dismissible alert
+  (on app open / when it first becomes true) and a persistent tappable nav-bar indicator
+  (`bell.badge`) on the Board that re-shows details; it must NOT obstruct controls. Verify a
+  persistence-error banner still appears at top with full priority (not demoted).
+- ⬜ **Overdue persists in Schedule (feedback pass 3, item 4):** an overdue (uncompleted,
+  unskipped) occurrence stays visible in all three modes — a pinned red "Overdue" section at
+  top of By-Time, red (non-dimmed) rows in By-Patient, red cells in Grid (above the now row,
+  lookback clamped to 24h in Grid) — until given/skipped. Confirm it does NOT age out or render
+  struck/past, and that marking it given/skipped removes it. Completed rendering unchanged.
+- ⬜ **Graduated redaction (feedback pass 3, item 3):** with privacy mode ON, notifications
+  read "[Medication|Care] due · Rm X" and digests "3 medications overdue · Rm 422" — kind
+  included, name/dosage/detail still excluded. Confirm pre/snooze/due/digests all follow the
+  format, mixed-kind digests say "tasks", privacy OFF is unchanged, and (Verify-on-Mac)
+  **watch-side tap-through detail remains sample-data until the sync milestone** — the watch
+  inherits the redacted phone notification automatically but its in-app detail is still stubbed.
+- ⬜ **Near-due creation note (feedback pass 5, item 3):** create a task whose first due minus
+  the lead is already past (e.g. interval 30 min with a 30-min lead, or a fixed time <30 min
+  away) → the schedule preview shows "Due <time> · too soon for a <N>-min early reminder — first
+  alert at due time". Confirm it appears live as the schedule/lead change, and is suppressed when
+  the task is muted.
+- ⬜ **Adjustable first reminder (feedback pass 3, item 1):** interval schedule + last-given
+  blank → the "First reminder" preview is an editable DatePicker defaulting to now+interval and
+  live-updating with the interval until touched. Saving sets `nextDueAt` directly (synthetic
+  first-due) with `lastCompletedAt` still nil — confirm NO administration event is created and
+  that later Given events anchor the interval from the actual given time.
+- ⬜ **Early Given fix (feedback pass 3, item 5):** mark a FIXED-time task Given before its
+  scheduled time — confirm `nextDueAt` advances to the NEXT listed time (not the same one) and
+  the old due's pre/due/taper notifications are canceled by the replan; the pending due alert
+  must NOT fire. Interval early-Given re-anchors to actual time (unchanged). Within 5 min before
+  due, rows read "Due now" with heavier weight (emphasis only). Covered by
+  `SchedulingEngineTests` (early/late fixed completion + planner-reflects-new-due).
 - ⬜ **Per-med color tag (design pass):** Add/Edit form swatch picker (8-color palette + None)
   persists on `CareTask.colorTagRaw`; migration-safe default "none" on an existing store.
   Renders as a leading channel — left-edge bar on Board / patient-detail / Schedule rows, dot on
@@ -221,6 +299,16 @@ Xcode 16+ must complete each item.
   data); sample-data previews. Live complication data can't be validated until
   WatchConnectivity + shared state exist (a later milestone).
 - ⬜ Watch UI is built on `NurseTimerCore` + `SyncTransport` only — no phone persistence coupling.
+- ⬜ **Watch & Reminders setup screen (nurse-support):** Settings → Apple Watch → "Watch &
+  reminders setup". Confirm the live checks read correctly on real paired devices —
+  notification permission + Time-Sensitive (from `UNUserNotificationCenter`), and **watch paired
+  / NurseTimer-installed-on-watch** (from a read-only `WCSession` probe on the **iOS** side).
+  Note: this iOS-side `WCSession.activate()` is the app's FIRST use of WatchConnectivity and is
+  unverified; it is a read-only diagnostic (sends nothing) and is independent of the still-stubbed
+  data-sync milestone — do not confuse the two. Verify the "Fix"/"Open Notification Settings"
+  buttons deep-link to NurseTimer's notification settings; the watch-side steps (install app,
+  Mirror my iPhone, Wrist Detection) are instruction-only because iOS exposes no URL to those
+  screens and no API to toggle them.
 
 ### Notification budget & taper (Core items 1–4 — verified in `swift test`; tune on Mac)
 - ✅ Cap ≤ 60 and full task representation at any load (61+ overdue; mixed; global escape
@@ -228,6 +316,15 @@ Xcode 16+ must complete each item.
 - ✅ Tapered post-due chain (Phase 1 @S / Phase 2 @15m / Phase 3 @30m), pre-scheduled for
   future occurrences; 5-ping floor then whole-chain digest replacement; repair warnings
   planner-owned + digested; `planWasReduced` + counts.
+- ✅ **Reduction order redesigned (feedback pass 5, item 2):** taper tails shed FIRST (to the
+  5-ping floor), then default-lead pre-alerts, then explicit-lead pre-alerts, then grouping.
+  A realistic 8-task shift retains all pre-alerts (permanent regression); explicit-lead
+  pre-alerts protected over default-lead — all tested in `PreAlertReductionTests`.
+- ⬜ **KEY HARDWARE CHECK (feedback pass 5):** on a real device under a FULL realistic shift
+  load (8–10 tasks with pre-scheduled tapers), confirm a **30-min pre-alert actually fires** at
+  due − 30m. This is the on-device confirmation of the reduction-order fix — the reported bug
+  was pre-alerts silently never firing. Also confirm a task saved with due − lead already past
+  fires only the due alert (item 3 preview should have warned).
 - ⬜ **Tune on Mac:** pre-scheduled tapers raise baseline notification demand, so grouping
   can activate at realistic loads (~15–20 tasks per horizon). Evaluate the "reminders were
   reduced" banner on device so it stays informative rather than noisy — consider surfacing

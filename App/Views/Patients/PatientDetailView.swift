@@ -1,4 +1,5 @@
 import SwiftUI
+import NurseTimerCore
 import NurseTimerModels
 
 /// Patient detail — the working hub (spec §6.2). Primary Add Medication / Add Task, the
@@ -13,15 +14,29 @@ struct PatientDetailView: View {
 
     private var settings: AppSettings { store.settings() }
 
-    /// The patient's tasks laid out chronologically for the day (PRN / no-due last).
-    private var chronologicalTasks: [CareTask] {
-        patient.tasks.sorted { ($0.nextDueAt ?? .distantFuture) < ($1.nextDueAt ?? .distantFuture) }
+    /// The patient's tasks of one kind, laid out chronologically for the day (PRN / no-due last).
+    private func tasks(of kind: TaskKind) -> [CareTask] {
+        patient.tasks
+            .filter { $0.kind == kind }
+            .sorted { ($0.nextDueAt ?? .distantFuture) < ($1.nextDueAt ?? .distantFuture) }
     }
 
     /// Projected times per task, from the shared projector (no duplicated projection logic).
     private var timesByTask: [UUID: [Date]] {
         Dictionary(uniqueKeysWithValues:
             PatientScheduleBuilder.lines(for: patient.tasks).map { ($0.id, $0.times) })
+    }
+
+    /// Today's resolved occurrences (given/done/skipped, not reverted), newest first — derived
+    /// live from TaskEvents (feedback pass 4, item 5). Display only, nothing persisted.
+    private var completedToday: [TaskEvent] {
+        let cal = Calendar.autoupdatingCurrent
+        return patient.tasks
+            .flatMap { $0.history }
+            .filter { !$0.reverted
+                && [.given, .done, .skipped].contains($0.action)
+                && cal.isDateInToday($0.timestamp) }
+            .sorted { $0.timestamp > $1.timestamp }
     }
 
     var body: some View {
@@ -33,20 +48,20 @@ struct PatientDetailView: View {
                 Button { store.editRequest = .add(patient, .generic) } label: {
                     Label("Add Task", systemImage: "checklist")
                 }
+                Button { store.editRequest = .add(patient, .reminder) } label: {
+                    Label("Add Reminder", systemImage: "bell.badge")
+                }
             }
 
-            Section("Today") {
-                if patient.tasks.isEmpty {
-                    Text("No medications or tasks yet.").foregroundStyle(.secondary)
-                }
-                ForEach(chronologicalTasks) { task in
-                    Button { store.taskDetailRequest = .init(task: task) } label: {
-                        HubTaskRow(task: task, times: timesByTask[task.id] ?? [], now: .now, settings: settings)
-                    }
-                    .buttonStyle(.plain)
-                    .taskSwipeActions(task: task, store: store)
-                }
+            if patient.tasks.isEmpty {
+                Section { Text("No medications, tasks, or reminders yet.").foregroundStyle(.secondary) }
             }
+            // Grouped by kind; Reminders at the bottom (feedback pass 4, item 3).
+            taskSection("Medications", kind: .medication)
+            taskSection("Care tasks", kind: .generic)
+            taskSection("Reminders", kind: .reminder)
+
+            completedTodaySection
 
             if let notes = patient.notes, !notes.isEmpty {
                 Section("Notes") { Text(notes) }
@@ -73,6 +88,44 @@ struct PatientDetailView: View {
             Button("Cancel", role: .cancel) {}
         }
     }
+
+    /// Collapsed-by-default "Completed today (N)" — resolved occurrences from TaskEvents, with
+    /// action + time (feedback pass 4, item 5). Expanded state is remembered for the session.
+    @ViewBuilder
+    private var completedTodaySection: some View {
+        let done = completedToday
+        if !done.isEmpty {
+            Section {
+                DisclosureGroup(isExpanded: Binding(
+                    get: { store.completedExpandedPatients.contains(patient.id) },
+                    set: { expanded in
+                        if expanded { store.completedExpandedPatients.insert(patient.id) }
+                        else { store.completedExpandedPatients.remove(patient.id) }
+                    })) {
+                    ForEach(done) { event in CompletedRow(event: event) }
+                } label: {
+                    Text("Completed today (\(done.count))").font(.headline)
+                }
+            }
+        }
+    }
+
+    /// A kind-grouped section of task rows, rendered only when the patient has tasks of that kind.
+    @ViewBuilder
+    private func taskSection(_ title: String, kind: TaskKind) -> some View {
+        let items = tasks(of: kind)
+        if !items.isEmpty {
+            Section(title) {
+                ForEach(items) { task in
+                    Button { store.taskDetailRequest = .init(task: task) } label: {
+                        HubTaskRow(task: task, times: timesByTask[task.id] ?? [], now: .now, settings: settings)
+                    }
+                    .buttonStyle(.plain)
+                    .taskSwipeActions(task: task, store: store)
+                }
+            }
+        }
+    }
 }
 
 /// A task row for the patient hub: the shared status/title/due row plus the projected
@@ -83,10 +136,16 @@ private struct HubTaskRow: View {
     let now: Date
     let settings: AppSettings
 
+    private var occurrences: [OccurrenceMark] { task.todayOccurrences(now: now) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             TaskRowView(task: task, now: now, settings: settings)
-            if !times.isEmpty {
+            // Fixed-times tasks show per-occurrence state (which of 0900/1700/2100 is done);
+            // other schedules fall back to the plain projected-times line (feedback pass 4 item 2c).
+            if !occurrences.isEmpty {
+                OccurrenceMarksView(marks: occurrences).padding(.leading, 22)
+            } else if !times.isEmpty {
                 Text("Today · " + PatientScheduleBuilder.timesText(times))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -94,5 +153,29 @@ private struct HubTaskRow: View {
                     .padding(.leading, 22)
             }
         }
+    }
+}
+
+/// One resolved occurrence in the "Completed today" section: action + task title + time
+/// (feedback pass 4, item 5). Derived from a TaskEvent; display only.
+private struct CompletedRow: View {
+    let event: TaskEvent
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol).foregroundStyle(.secondary).frame(width: 20)
+            Text("\(actionWord) · \(event.task?.title ?? "Task")").font(.subheadline)
+            Spacer()
+            Text(AppTime.short(event.timestamp)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+        }
+    }
+
+    private var actionWord: String {
+        switch event.action {
+        case .given: "Given"; case .done: "Done"; case .skipped: "Skipped"; default: "Resolved"
+        }
+    }
+    private var symbol: String {
+        event.action == .skipped ? "forward.circle" : "checkmark.circle"
     }
 }

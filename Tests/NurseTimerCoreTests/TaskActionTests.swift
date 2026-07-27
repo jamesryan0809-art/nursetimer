@@ -19,4 +19,25 @@ final class TaskActionTests: XCTestCase {
         let others: [TaskAction] = [.given, .done, .skipped, .snoozed, .missedAcknowledged]
         XCTAssertFalse(others.contains(.paused))
     }
+
+    // Undo support (feedback pass 4, item 4): .resumed + .undone.
+
+    func test_resumedAndUndone_rawValuesAreStable() {
+        XCTAssertEqual(TaskAction.resumed.rawValue, "resumed")
+        XCTAssertEqual(TaskAction.undone.rawValue, "undone")
+        XCTAssertEqual(TaskAction(rawValue: "resumed"), .resumed)
+        XCTAssertEqual(TaskAction(rawValue: "undone"), .undone)
+    }
+
+    func test_resumedAndUndone_codableRoundTrip() throws {
+        for action in [TaskAction.resumed, .undone] {
+            let data = try JSONEncoder().encode(action)
+            XCTAssertEqual(try JSONDecoder().decode(TaskAction.self, from: data), action)
+        }
+    }
+
+    func test_allActionsDistinct() {
+        let all: [TaskAction] = [.given, .done, .skipped, .snoozed, .missedAcknowledged, .paused, .resumed, .undone]
+        XCTAssertEqual(Set(all).count, all.count)
+    }
 }

@@ -9,6 +9,7 @@ struct TaskRowView: View {
     let settings: AppSettings
 
     private var taskStatus: TaskStatus { status(of: task, now: now, settings: settings) }
+    private var isDueNow: Bool { !task.isPaused && DueText.isDueNowWindow(task.nextDueAt, now: now) }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -36,6 +37,8 @@ struct TaskRowView: View {
             VStack(alignment: .trailing, spacing: 2) {
                 Text(dueLabel)
                     .font(.headline.monospacedDigit())
+                    // "Due now"-adjacent emphasis in the tight pre-due window (feedback item 5).
+                    .fontWeight(isDueNow ? .heavy : nil)
                     .foregroundStyle(taskStatus.color)
                 if task.isPaused { Text("Paused").font(.caption).foregroundStyle(.secondary) }
             }
