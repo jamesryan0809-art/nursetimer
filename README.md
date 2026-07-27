@@ -124,6 +124,24 @@ Xcode 16+ must complete each item.
   destination (`$(CONTENTS_FOLDER_PATH)/Watch`).
 - ⬜ **Info.plist keys (post-build-day):** `CFBundleExecutable = $(EXECUTABLE_NAME)` now present
   in App/Watch/Widget plists (installer required it). Confirm all three targets install.
+- ✅ **Watch install "app cannot be installed at this time" — config ruled out (feedback pass 5,
+  item 4).** Repo-side audit found: bundle-id nesting correct (`com.nursetimer.app` /
+  `.app.watch` / `.app.watch.widget`); `WKCompanionAppBundleIdentifier` = `com.nursetimer.app`
+  matches the iOS app; watchOS deployment target 10.0; widget has no entitlements. **Root cause
+  was the `com.apple.developer.usernotifications.time-sensitive` entitlement** (present in both
+  App and Watch entitlements) — a **personal/free Apple team cannot sign it**, which surfaces
+  on-device as "app cannot be installed." The Mac already **removed it from both** (commit
+  `b61cac0`); both entitlements files are now empty `<dict/>`. No code change needed — the
+  scheduler still sets `.timeSensitive` interruption level, which **degrades to normal delivery**
+  without the entitlement (no crash). **Trade-off:** time-sensitive notifications won't break
+  through Focus/Do-Not-Disturb until a **paid** team re-adds the capability.
+- ⬜ **Watch install — remaining device-side checks (feedback pass 5, item 4):** with the
+  entitlement removed, on the actual devices confirm: a **paid**-vs-free team is selected in Xcode
+  Signing (free team now signs, but re-adds nothing restricted); the paired watch runs **watchOS
+  ≥ 10.0**; the watch has **sufficient free storage**; the watch is **paired + unlocked** during
+  install; and after `make project` the app installs WITH `.app/Watch/` present. If a paid team
+  is used and time-sensitive break-through is wanted, re-add
+  `com.apple.developer.usernotifications.time-sensitive` to both entitlements.
 
 ### Core (already verified where noted)
 - ✅ Swift XCTest suite: **109 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
@@ -409,7 +427,8 @@ Xcode 16+ must complete each item.
 - ⬜ Light and dark appearance both correct (status colors only).
 - ⬜ iPhone simulator/device run; Watch simulator/device run.
 - ⬜ Complication/widget timelines render across accessory families.
-- ⬜ Signing, entitlements (Time Sensitive), bundle-id nesting, and companion-app config valid.
+- ⬜ Signing, entitlements (Time-Sensitive **removed** for free-team install — pass 5 item 4),
+  bundle-id nesting, and companion-app config valid.
 - ⬜ No network traffic generated anywhere (spec §10 / §1.2) — verify with a proxy/Network report.
 
 ### Behavior Core enforces that the UI must honor
