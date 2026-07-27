@@ -24,7 +24,7 @@ struct ScheduleView: View {
     @State private var mode: ScheduleMode = .byTime
 
     private var settings: AppSettings { store.settings() }
-    private var activeTasks: [CareTask] { tasks.filter { $0.patient?.isActive == true } }
+    private var activeTasks: [CareTask] { tasks.filter { $0.patient?.isActive == true && !$0.isArchived } }
     private var activePatients: [Patient] {
         patients.filter { $0.isActive }
             .sorted { $0.roomNumber.localizedStandardCompare($1.roomNumber) == .orderedAscending }

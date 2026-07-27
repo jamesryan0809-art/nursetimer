@@ -67,14 +67,16 @@ struct TaskDetailSheet: View {
                 Text("Rm \(task.patient?.roomNumber ?? "?") · \(task.title) — no reminders until you resume it.")
             }
             .confirmationDialog("Delete this task?", isPresented: $confirmingDelete, titleVisibility: .visible) {
-                Button("Delete", role: .destructive) { store.deleteTask(task); dismiss() }
+                Button("Delete", role: .destructive) { store.setArchived(task, true); dismiss() }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Rm \(task.patient?.roomNumber ?? "?") · \(task.title) — this permanently removes the task and its log history, and cancels its reminders. This can't be undone.")
+                Text("Rm \(task.patient?.roomNumber ?? "?") · \(task.title) — removes it from your lists and cancels its reminders. Its log history is kept.")
             }
-            // If the task was deleted from the nested Edit screen, close this sheet too rather
-            // than lingering on a now-deleted task (feedback pass 4, item 1).
-            .sheet(isPresented: $editing, onDismiss: { if store.task(withID: task.id) == nil { dismiss() } }) {
+            // If the task was deleted (archived) from the nested Edit screen, close this sheet
+            // too rather than lingering on a now-hidden task (feedback pass 4 item 1 / pass 5 item 2).
+            .sheet(isPresented: $editing, onDismiss: {
+                if store.task(withID: task.id) == nil || task.isArchived { dismiss() }
+            }) {
                 NavigationStack { TaskEditView(target: needsRepair ? .repair(task) : .edit(task)) }
             }
         }

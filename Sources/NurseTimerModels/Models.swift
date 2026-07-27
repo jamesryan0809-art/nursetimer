@@ -91,6 +91,11 @@ public final class CareTask {
     /// against it, or alerts from it — that would be dose-timing calculation (spec §1.2 non-goal).
     /// The nurse reads it alongside last-given and decides. Migration-safe default empty.
     public var prnFrequencyText: String = ""
+    /// Archived (feedback pass 5, item 2) — "Delete" in the UI sets this instead of hard-deleting.
+    /// An archived task is excluded from every active list and the planner exactly like a paused
+    /// one, and its reminders are canceled, but the task record + its `TaskEvent` history survive
+    /// so the Log keeps a truthful history with the task's name. Migration-safe default `false`.
+    public var isArchived: Bool = false
 
     public var patient: Patient?
 
@@ -115,6 +120,7 @@ public final class CareTask {
         colorTagRaw: String = "none",
         notificationsEnabled: Bool = true,
         prnFrequencyText: String = "",
+        isArchived: Bool = false,
         history: [TaskEvent] = []
     ) {
         self.id = id
@@ -134,6 +140,7 @@ public final class CareTask {
         self.colorTagRaw = colorTagRaw
         self.notificationsEnabled = notificationsEnabled
         self.prnFrequencyText = prnFrequencyText
+        self.isArchived = isArchived
         self.history = history
     }
 }

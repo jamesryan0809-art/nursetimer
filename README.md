@@ -126,7 +126,7 @@ Xcode 16+ must complete each item.
   in App/Watch/Widget plists (installer required it). Confirm all three targets install.
 
 ### Core (already verified where noted)
-- ✅ Swift XCTest suite: **105 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
+- ✅ Swift XCTest suite: **106 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
 - ⬜ SwiftData model-container initialization (`PersistenceController.makeContainer`).
 - ⬜ Store file is `FileProtectionType.complete` at rest.
 - ⬜ CRUD persistence (patients, tasks, events, settings) survives relaunch.
@@ -185,11 +185,14 @@ Xcode 16+ must complete each item.
   "No time" not "PRN"; the task sheet offers Done / Edit / Delete only (no Snooze/Skip/Pause);
   Done moves it to Completed today. Meds/care still require a schedule. Core-covered by
   `ScheduleRepairTests` (round-trip, corrupt→needsRepair, nil due).
-- ⬜ **Delete task (feedback pass 4, item 1):** task sheet + Edit screen both offer a
-  confirmed, destructive Delete; the confirm names task + room and states log history is
-  removed (TaskEvent cascade). Confirm pending notifications are canceled (replan) and that
-  deleting from the nested Edit screen also closes the task sheet (it checks the task still
-  exists). Patient delete unchanged.
+- ⬜ **Delete = archive (feedback pass 5, item 2):** Delete now archives (`CareTask.isArchived`,
+  migration-safe default false). Confirm an archived task vanishes from Board / patient detail /
+  Schedule / planner (reminders canceled), but the **Log keeps its history with the name, tagged
+  "(deleted)"**; the confirm text no longer claims history is removed; deleting from the nested
+  Edit screen closes the task sheet. **Undo interaction:** an archived task's Log events must NOT
+  offer Undo (undoing a Given would resurrect schedule state for a planning-excluded task).
+  Patient hard-delete still cascades. Core-covered by `NotificationPlannerTests`
+  (archived → no notifications).
 - ⬜ **Action acknowledgment (feedback micro-pass):** every successful Given/Skip/Snooze/
   Pause/Resume fires a haptic + a brief bottom toast ("Given · next due 5:07 PM", etc.) read
   from post-commit state; toast auto-dismisses ~2s, never covers the nav bar or action buttons,

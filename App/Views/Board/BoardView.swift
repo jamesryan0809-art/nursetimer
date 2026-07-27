@@ -32,7 +32,7 @@ struct BoardView: View {
 
     private var activePatients: [Patient] { patients.filter { $0.isActive } }
     private var inactivePatients: [Patient] { patients.filter { !$0.isActive } }
-    private var scheduledTasks: [CareTask] { tasks.filter { $0.patient?.isActive == true } }
+    private var scheduledTasks: [CareTask] { tasks.filter { $0.patient?.isActive == true && !$0.isArchived } }
 
     private var repairTasks: [CareTask] {
         scheduledTasks.filter { $0.scheduleType.isNeedsRepair }
@@ -69,7 +69,7 @@ struct BoardView: View {
 
     /// True if any of the patient's tasks needs attention (overdue or schedule-repair).
     private func hasAttention(_ patient: Patient) -> Bool {
-        patient.tasks.contains { status(of: $0, now: now, settings: settings).isAttention }
+        patient.tasks.contains { !$0.isArchived && status(of: $0, now: now, settings: settings).isAttention }
     }
 
     var body: some View {
@@ -180,17 +180,19 @@ struct BoardView: View {
     // MARK: Ordering
 
     private func soonestDue(_ patient: Patient) -> Date {
-        (patient.tasks.compactMap { $0.isPaused ? nil : $0.nextDueAt }.min()) ?? .distantFuture
+        (patient.tasks.compactMap { $0.isPaused || $0.isArchived ? nil : $0.nextDueAt }.min()) ?? .distantFuture
     }
 
     private func orderedTasks(for patient: Patient) -> [CareTask] {
-        patient.tasks.sorted { lhs, rhs in
-            // Overdue/needsRepair first, then by due time; PRN/paused last.
-            let a = status(of: lhs, now: now, settings: settings)
-            let b = status(of: rhs, now: now, settings: settings)
-            if a.isAttention != b.isAttention { return a.isAttention && !b.isAttention }
-            return (lhs.nextDueAt ?? .distantFuture) < (rhs.nextDueAt ?? .distantFuture)
-        }
+        patient.tasks
+            .filter { !$0.isArchived }   // archived ("deleted") tasks are off the Board (pass 5, item 2)
+            .sorted { lhs, rhs in
+                // Overdue/needsRepair first, then by due time; PRN/paused last.
+                let a = status(of: lhs, now: now, settings: settings)
+                let b = status(of: rhs, now: now, settings: settings)
+                if a.isAttention != b.isAttention { return a.isAttention && !b.isAttention }
+                return (lhs.nextDueAt ?? .distantFuture) < (rhs.nextDueAt ?? .distantFuture)
+            }
     }
 }
 
@@ -207,9 +209,10 @@ private struct PatientCardHeader: View {
     }
 
     private var summary: String {
-        let n = patient.tasks.count
+        let active = patient.tasks.filter { !$0.isArchived }
+        let n = active.count
         let count = "\(n) task\(n == 1 ? "" : "s")"
-        if let soonest = patient.tasks.compactMap({ $0.isPaused ? nil : $0.nextDueAt }).min() {
+        if let soonest = active.compactMap({ $0.isPaused ? nil : $0.nextDueAt }).min() {
             return "\(count) · next \(DueText.string(for: soonest, now: now))"
         }
         return count

@@ -14,10 +14,11 @@ struct PatientDetailView: View {
 
     private var settings: AppSettings { store.settings() }
 
-    /// The patient's tasks of one kind, laid out chronologically for the day (PRN / no-due last).
+    /// The patient's active tasks of one kind, laid out chronologically (PRN / no-due last).
+    /// Archived ("deleted") tasks are excluded (feedback pass 5, item 2).
     private func tasks(of kind: TaskKind) -> [CareTask] {
         patient.tasks
-            .filter { $0.kind == kind }
+            .filter { $0.kind == kind && !$0.isArchived }
             .sorted { ($0.nextDueAt ?? .distantFuture) < ($1.nextDueAt ?? .distantFuture) }
     }
 
@@ -32,6 +33,7 @@ struct PatientDetailView: View {
     private var completedToday: [TaskEvent] {
         let cal = Calendar.autoupdatingCurrent
         return patient.tasks
+            .filter { !$0.isArchived }                 // deleted tasks live only in the Log now
             .flatMap { $0.history }
             .filter { !$0.reverted
                 && [.given, .done, .skipped].contains($0.action)

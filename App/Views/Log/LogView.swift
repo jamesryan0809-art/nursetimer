@@ -86,7 +86,9 @@ private struct LogRow: View {
     private var title: String {
         let room = (event.task?.patient?.roomNumber).map { "Rm \($0) · " } ?? ""
         let name = event.task?.title ?? "Task"
-        return "\(actionWord) — \(room)\(name)"
+        // Archived ("deleted") tasks keep their history here, tagged (feedback pass 5, item 2).
+        let deleted = event.task?.isArchived == true ? " (deleted)" : ""
+        return "\(actionWord) — \(room)\(name)\(deleted)"
     }
     private var actionWord: String {
         switch event.action {

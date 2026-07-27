@@ -271,6 +271,18 @@ final class NurseStore {
         commit()
     }
 
+    /// Archive ("Delete" in the UI) or restore a task (feedback pass 5, item 2). Archiving keeps
+    /// the task record + its TaskEvents (the Log stays truthful) but excludes it from every active
+    /// list and the planner like a paused task; the `commit()`→`replan()` cancels its pending
+    /// notifications. We do NOT `context.delete`, so history survives.
+    func setArchived(_ task: CareTask, _ archived: Bool) {
+        let room = task.patient?.roomNumber ?? "?"
+        task.isArchived = archived
+        task.updatedAt = .now
+        scheduler.removeRepairWarning(taskID: task.id)
+        if commit() { acknowledge(archived ? "Deleted · Rm \(room)" : "Restored · Rm \(room)", .warning) }
+    }
+
     func acknowledgeMissed(_ task: CareTask, at date: Date = .now) {
         record(.missedAcknowledged, on: task, at: date)
         commit()
@@ -293,7 +305,11 @@ final class NurseStore {
     /// task's most recent event.
     func canUndo(_ event: TaskEvent) -> Bool {
         guard let task = event.task, isUndoable(event), !event.reverted,
-              event.previousIsPaused != nil else { return false }
+              event.previousIsPaused != nil,
+              // An archived ("deleted") task is excluded from planning; undoing a Given/Skip would
+              // resurrect schedule state (a live nextDueAt) for a task that isn't planned. Don't
+              // offer Undo on archived tasks (feedback pass 5, item 2 interaction with pass-4 Undo).
+              !task.isArchived else { return false }
         return isLatestEvent(event, for: task)
     }
 
@@ -460,16 +476,8 @@ final class NurseStore {
         commit()
     }
 
-    /// Delete a task and its log history (TaskEvent cascade, spec §3.2 relationship). The
-    /// follow-on `commit()`→`replan()` cancels all of the task's pending notifications
-    /// (cancel-all-then-reschedule; the task is gone from `planningTasks`). Not undoable
-    /// (feedback pass 4, items 1 & 4).
-    func deleteTask(_ task: CareTask) {
-        let room = task.patient?.roomNumber ?? "?"   // capture before the object is deleted
-        scheduler.removeRepairWarning(taskID: task.id)
-        context.delete(task)
-        if commit() { acknowledge("Deleted · Rm \(room)", .warning) }
-    }
+    // Single-task hard delete was replaced by archive (`setArchived`, feedback pass 5 item 2) so
+    // the Log keeps history. Patient hard-delete still cascades (`deletePatient`).
 
     // MARK: Save + replan
 

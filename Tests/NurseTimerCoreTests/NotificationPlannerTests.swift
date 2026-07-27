@@ -186,6 +186,18 @@ final class NotificationPlannerTests: XCTestCase {
         XCTAssertFalse(live.notifications.isEmpty)
     }
 
+    /// Feedback pass 5, item 2: an archived task is excluded from planning like a paused one —
+    /// no notifications — so "delete" (archive) cancels its reminders via replan.
+    func test_archivedTask_producesNoNotifications() {
+        let cal = utcCalendar()
+        let now = dt(cal, 2026, 7, 19, 16, 0)
+        let due = dt(cal, 2026, 7, 19, 16, 30)
+        let archived = NotificationPlanner.plan(tasks: [
+            TaskSnapshot(id: taskID1, scheduleType: everyHr(4), nextDueAt: due, isArchived: true),
+        ], settings: .default, now: now, calendar: cal)
+        XCTAssertTrue(archived.notifications.isEmpty)
+    }
+
     func test_planIsSortedByFireDate() {
         let cal = utcCalendar()
         let now = dt(cal, 2026, 7, 19, 8, 0)

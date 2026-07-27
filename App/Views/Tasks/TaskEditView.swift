@@ -147,10 +147,10 @@ struct TaskEditView: View {
                     }
                 }
                 .confirmationDialog("Delete this task?", isPresented: $confirmingDelete, titleVisibility: .visible) {
-                    Button("Delete", role: .destructive) { store.deleteTask(task); dismiss() }
+                    Button("Delete", role: .destructive) { store.setArchived(task, true); dismiss() }
                     Button("Cancel", role: .cancel) {}
                 } message: {
-                    Text("Rm \(task.patient?.roomNumber ?? "?") · \(task.title) — this permanently removes the task and its log history, and cancels its reminders. This can't be undone.")
+                    Text("Rm \(task.patient?.roomNumber ?? "?") · \(task.title) — removes it from your lists and cancels its reminders. Its log history is kept.")
                 }
             }
         }

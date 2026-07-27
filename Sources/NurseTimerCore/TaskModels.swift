@@ -158,6 +158,10 @@ public protocol SchedulableTask {
     /// unaffected. This is not a scheduling change: the planner drops muted tasks the same
     /// way it drops paused tasks.
     var notificationsEnabled: Bool { get }
+    /// Archived (feedback pass 5, item 2) — excluded from planning EXACTLY like a paused task
+    /// (its reminders are canceled) while its record + log history survive. Default `false` (see
+    /// extension) so existing conformers/tests are unaffected. Not a scheduling change.
+    var isArchived: Bool { get }
     /// If the nurse explicitly hit Snooze, the moment they did so. The re-ping
     /// chain re-anchors here instead of at `nextDueAt`. Nil normally.
     var explicitSnoozeAt: Date? { get }
@@ -166,6 +170,8 @@ public protocol SchedulableTask {
 public extension SchedulableTask {
     /// Default: notifications on. Conformers that predate the switch keep firing.
     var notificationsEnabled: Bool { true }
+    /// Default: not archived.
+    var isArchived: Bool { false }
 }
 
 /// Concrete, immutable `SchedulableTask` for the engine, planner, and tests.
@@ -180,6 +186,7 @@ public struct TaskSnapshot: SchedulableTask, Equatable, Sendable {
     public let snoozeMinutes: Int?
     public let isPaused: Bool
     public let notificationsEnabled: Bool
+    public let isArchived: Bool
     public let explicitSnoozeAt: Date?
 
     public init(
@@ -193,6 +200,7 @@ public struct TaskSnapshot: SchedulableTask, Equatable, Sendable {
         snoozeMinutes: Int? = nil,
         isPaused: Bool = false,
         notificationsEnabled: Bool = true,
+        isArchived: Bool = false,
         explicitSnoozeAt: Date? = nil
     ) {
         self.id = id
@@ -205,6 +213,7 @@ public struct TaskSnapshot: SchedulableTask, Equatable, Sendable {
         self.snoozeMinutes = snoozeMinutes
         self.isPaused = isPaused
         self.notificationsEnabled = notificationsEnabled
+        self.isArchived = isArchived
         self.explicitSnoozeAt = explicitSnoozeAt
     }
 }

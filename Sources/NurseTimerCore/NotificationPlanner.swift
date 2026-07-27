@@ -216,9 +216,10 @@ public enum NotificationPlanner {
                 tasksNeedingRepair.append(task.id)
                 continue
             }
-            // Muted tasks are excluded exactly like paused ones (design pass, feedback item 2):
-            // they keep their schedule and stay visible in the app, they just fire no reminders.
-            guard !task.isPaused, task.notificationsEnabled, let due = task.nextDueAt else { continue }
+            // Muted (feedback item 2) and archived (feedback pass 5, item 2) tasks are excluded
+            // exactly like paused ones — they fire no reminders.
+            guard !task.isArchived, !task.isPaused, task.notificationsEnabled,
+                  let due = task.nextDueAt else { continue }
 
             let lead = SchedulingEngine.effectiveLeadMinutes(task, settings)
             let snooze = SchedulingEngine.effectiveSnoozeMinutes(task, settings)
