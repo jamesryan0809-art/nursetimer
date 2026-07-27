@@ -5,10 +5,11 @@ import NurseTimerCore
 /// "not chosen yet" — the state a repair starts in (schedule field empty & required).
 struct ScheduleDraft {
     enum Mode: String, CaseIterable, Identifiable {
-        case interval, fixed, once, prn
+        case unscheduled, interval, fixed, once, prn
         var id: String { rawValue }
         var label: String {
             switch self {
+            case .unscheduled: "No schedule"
             case .interval: "Every…"
             case .fixed: "At set times"
             case .once: "Once"
@@ -29,6 +30,7 @@ struct ScheduleDraft {
     /// The Core `ScheduleType`, or nil when unset/invalid — the form disables Save on nil.
     var scheduleType: ScheduleType? {
         switch mode {
+        case .unscheduled: return .unscheduled
         case .interval: return ScheduleType.every(hours: intervalHours, minutes: intervalMinutes)
         case .fixed:    return fixedTimes.isEmpty ? nil : .fixedTimes(fixedTimes)
         case .once:     return .once(onceDate)
@@ -53,6 +55,8 @@ struct ScheduleDraft {
             draft.onceDate = date
         case .prn:
             draft.mode = .prn
+        case .unscheduled:
+            draft.mode = .unscheduled
         case .needsRepair:
             draft.mode = nil
         }

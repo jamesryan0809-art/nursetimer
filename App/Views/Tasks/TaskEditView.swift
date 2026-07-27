@@ -85,6 +85,10 @@ struct TaskEditView: View {
                     Text("Care task").tag(TaskKind.generic)
                     Text("Reminder").tag(TaskKind.reminder)
                 }.pickerStyle(.segmented)
+                .onChange(of: kind) { _, newKind in
+                    // "No schedule" is reminders-only; meds/care must pick a real schedule.
+                    if newKind != .reminder && draft.mode == .unscheduled { draft.mode = nil }
+                }
             }
 
             Section("Title") {
@@ -103,7 +107,7 @@ struct TaskEditView: View {
             SchedulePickerView(draft: $draft, requireSelection: target.isRepair,
                                lastGiven: setLastGiven ? lastGiven : nil,
                                firstReminder: $firstReminder, firstReminderCustom: $firstReminderCustom,
-                               leadMinutes: notificationsEnabled ? leadMinutes : 0)
+                               leadMinutes: notificationsEnabled ? leadMinutes : 0, kind: kind)
 
             if draft.mode == .prn && kind != .reminder {
                 Section {
@@ -194,6 +198,8 @@ struct TaskEditView: View {
         switch target {
         case .add(_, let presetKind):
             kind = presetKind   // "Add Medication" / "Add Task" preset the type
+            // Reminders default to no schedule (feedback pass 5, item 1); other kinds pick one.
+            if presetKind == .reminder { draft.mode = .unscheduled }
         case .edit(let task), .repair(let task):
             kind = task.kind
             title = task.title

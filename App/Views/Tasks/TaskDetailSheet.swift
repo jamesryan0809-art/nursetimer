@@ -103,6 +103,7 @@ struct TaskDetailSheet: View {
         case .needsRepair: return "Schedule needs repair"
         case .paused:      return "Paused"
         case .prn:         return "PRN · as needed"
+        case .unscheduled: return "No schedule"
         default:           return DueText.string(for: task.nextDueAt, now: .now)
         }
     }
@@ -121,36 +122,42 @@ struct TaskDetailSheet: View {
         }
         .buttonStyle(.borderedProminent).tint(.green)
 
-        Button {
-            store.snooze(task); dismiss()
-        } label: {
-            Label("Snooze", systemImage: "zzz").frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.bordered).tint(.indigo)
+        // Snooze / Skip / Pause don't apply to a scheduleless reminder (pass 5, item 1) —
+        // it's a plain checklist item: Done / Edit / Delete only.
+        if !task.isUnscheduled {
+            Button {
+                store.snooze(task); dismiss()
+            } label: {
+                Label("Snooze", systemImage: "zzz").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered).tint(.indigo)
 
-        Button {
-            store.skip(task, source: "in app"); dismiss()
-        } label: {
-            Label("Skip Once", systemImage: "forward").frame(maxWidth: .infinity)
+            Button {
+                store.skip(task, source: "in app"); dismiss()
+            } label: {
+                Label("Skip Once", systemImage: "forward").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered).tint(.orange)
         }
-        .buttonStyle(.bordered).tint(.orange)
 
         Divider().padding(.vertical, 4)
 
-        if task.isPaused {
-            Button {
-                store.setPaused(task, false); dismiss()
-            } label: {
-                Label("Resume", systemImage: "play").frame(maxWidth: .infinity)
+        if !task.isUnscheduled {
+            if task.isPaused {
+                Button {
+                    store.setPaused(task, false); dismiss()
+                } label: {
+                    Label("Resume", systemImage: "play").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered).tint(.green)
+            } else {
+                Button(role: .destructive) {
+                    confirmingPause = true
+                } label: {
+                    Label("Pause", systemImage: "pause").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.bordered).tint(.green)
-        } else {
-            Button(role: .destructive) {
-                confirmingPause = true
-            } label: {
-                Label("Pause", systemImage: "pause").frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
         }
 
         Button {

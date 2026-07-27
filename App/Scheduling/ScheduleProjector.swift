@@ -51,8 +51,8 @@ enum ScheduleProjector {
             }
 
             switch schedule {
-            case .prn, .needsRepair:
-                continue   // handled above
+            case .prn, .unscheduled, .needsRepair:
+                continue   // no schedule → no projected occurrences
 
             case .once(let date):
                 if date >= now, date <= end { result.append(make(task, at: date)) }

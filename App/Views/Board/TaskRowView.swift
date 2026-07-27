@@ -57,6 +57,7 @@ struct TaskRowView: View {
         switch taskStatus {
         case .needsRepair: return "Fix"
         case .prn:         return "PRN"
+        case .unscheduled: return "No time"
         case .paused:      return "—"
         default:           return DueText.string(for: task.nextDueAt, now: now)
         }

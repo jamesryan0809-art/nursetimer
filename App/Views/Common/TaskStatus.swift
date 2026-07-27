@@ -10,7 +10,8 @@ enum TaskStatus {
     case dueSoon
     case upcoming
     case paused
-    case prn          // no automatic schedule
+    case prn          // no automatic schedule (as-needed medication)
+    case unscheduled  // no schedule at all — a checklist reminder (feedback pass 5, item 1)
 
     var color: Color {
         switch self {
@@ -20,6 +21,7 @@ enum TaskStatus {
         case .upcoming:    return .primary
         case .paused:      return .secondary
         case .prn:         return .secondary
+        case .unscheduled: return .secondary
         }
     }
 
@@ -30,6 +32,7 @@ enum TaskStatus {
 func status(of task: CareTask, now: Date, settings: AppSettings) -> TaskStatus {
     if task.scheduleType.isNeedsRepair { return .needsRepair }
     if task.isPaused { return .paused }
+    if task.isUnscheduled { return .unscheduled }
     guard let due = task.nextDueAt else { return .prn }
     if due <= now { return .overdue }
     let lead = task.leadTimeMinutes ?? settings.defaultLeadTimeMinutes

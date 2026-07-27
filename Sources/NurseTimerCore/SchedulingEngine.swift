@@ -48,6 +48,8 @@ public enum SchedulingEngine {
             return nil
         case .prn:
             return nil
+        case .unscheduled:
+            return nil   // scheduleless reminder — never a due time
         case .needsRepair:
             // A broken schedule produces no next-due. It must be repaired first.
             return nil
@@ -77,6 +79,8 @@ public enum SchedulingEngine {
             return date
         case .prn:
             return nil
+        case .unscheduled:
+            return nil   // scheduleless reminder — no first due
         case .needsRepair:
             return nil
         }

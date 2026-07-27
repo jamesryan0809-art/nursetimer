@@ -18,6 +18,27 @@ final class ScheduleRepairTests: XCTestCase {
         }
         XCTAssertEqual(raw, corrupt)               // raw bytes preserved for diagnostics
         XCTAssertNotEqual(schedule, .prn)          // the dangerous silent fallback is gone
+        XCTAssertNotEqual(schedule, .unscheduled)  // and never silently .unscheduled (pass 5 item 1)
+    }
+
+    // MARK: Unscheduled (feedback pass 5, item 1) — no schedule, no due, decode-safe
+
+    func test_unscheduled_roundTripsAndIsDistinct() throws {
+        let data = try JSONEncoder().encode(ScheduleType.unscheduled)
+        XCTAssertEqual(try JSONDecoder().decode(ScheduleType.self, from: data), .unscheduled)
+        XCTAssertEqual(ScheduleType.decode(fromStore: data), .unscheduled)
+        // Distinct from the other no-due cases.
+        XCTAssertNotEqual(ScheduleType.unscheduled, .prn)
+        XCTAssertNotEqual(ScheduleType.unscheduled, .needsRepair(rawPayload: Data()))
+        XCTAssertFalse(ScheduleType.unscheduled.isNeedsRepair)
+    }
+
+    func test_unscheduled_producesNoDueTime() {
+        let cal = utcCalendar()
+        let anchor = dt(cal, 2026, 7, 19, 13, 7)
+        XCTAssertNil(SchedulingEngine.firstDue(for: .unscheduled, anchor: anchor, calendar: cal))
+        XCTAssertNil(SchedulingEngine.nextDueAfterCompletion(
+            schedule: .unscheduled, completedAt: anchor, calendar: cal))
     }
 
     func test_outOfRangeIntervalPayload_decodesToNeedsRepair() throws {

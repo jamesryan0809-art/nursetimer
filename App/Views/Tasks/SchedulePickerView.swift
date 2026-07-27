@@ -19,6 +19,15 @@ struct SchedulePickerView: View {
     /// Effective lead minutes for this task (0 when notifications are muted) — drives the
     /// "too soon for an early reminder" preview note (feedback pass 5, item 3).
     var leadMinutes: Int
+    /// The task's kind — only reminders may be unscheduled (feedback pass 5, item 1).
+    var kind: TaskKind
+
+    /// Modes offered for this kind: reminders can be scheduleless; meds/care stay
+    /// schedule-required.
+    private var offeredModes: [ScheduleDraft.Mode] {
+        kind == .reminder ? ScheduleDraft.Mode.allCases
+                          : ScheduleDraft.Mode.allCases.filter { $0 != .unscheduled }
+    }
 
     /// The interval + no-last-given case, where the first reminder is nurse-adjustable.
     private var firstReminderEditable: Bool { draft.mode == .interval && lastGiven == nil }
@@ -35,7 +44,7 @@ struct SchedulePickerView: View {
             guard let s = draft.scheduleType else { return nil }
             return SchedulingEngine.firstDue(for: s, anchor: .now, calendar: cal)
         case .once:  return draft.onceDate
-        case .prn, .none: return nil
+        case .prn, .unscheduled, .none: return nil
         }
     }
 
@@ -55,12 +64,13 @@ struct SchedulePickerView: View {
                 if requireSelection && draft.mode == nil {
                     Text("Choose…").tag(ScheduleDraft.Mode?.none)
                 }
-                ForEach(ScheduleDraft.Mode.allCases) { mode in
+                ForEach(offeredModes) { mode in
                     Text(mode.label).tag(ScheduleDraft.Mode?.some(mode))
                 }
             }
 
             switch draft.mode {
+            case .unscheduled: Text("No schedule — this reminder has no time and won't notify.").font(.footnote).foregroundStyle(.secondary)
             case .interval: intervalControls
             case .fixed:    fixedControls
             case .once:     DatePicker("At", selection: $draft.onceDate)
@@ -128,7 +138,7 @@ struct SchedulePickerView: View {
                   let due = SchedulingEngine.firstDue(for: schedule, anchor: .now, calendar: cal)
             else { return nil }
             return ("Next", Self.humanTime(due, cal))
-        case .once, .prn, .none:
+        case .once, .prn, .unscheduled, .none:
             return nil   // pickers already convey these
         }
     }

@@ -161,6 +161,10 @@ extension CareTask {
     /// (feedback item 3). Lets views branch without importing the Core `ScheduleType` enum.
     public var isPRN: Bool { if case .prn = scheduleType { return true }; return false }
 
+    /// True iff this task has no schedule at all (feedback pass 5, item 1) — a scheduleless
+    /// reminder rendered as a checklist item.
+    public var isUnscheduled: Bool { if case .unscheduled = scheduleType { return true }; return false }
+
     /// Apply a nurse-selected repair: set a new valid schedule and establish a FRESH
     /// `nextDueAt` from `anchor` (last-given time, or now). Clears the repair state
     /// (the schedule is valid again) and never reuses the old, untrusted `nextDueAt`

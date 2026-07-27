@@ -75,6 +75,10 @@ public enum ScheduleType: Codable, Equatable, Hashable, Sendable {
     case once(Date)
     /// As-needed. Never auto-schedules.
     case prn
+    /// No schedule at all (feedback pass 5, item 1) — a scheduleless reminder ("call family").
+    /// Produces no due time and no reminders ever; distinct from `.prn` (which is a med given
+    /// as-needed) so the UI can render it as a plain checklist item.
+    case unscheduled
     /// A schedule that could NOT be decoded from the store, carrying the raw
     /// undecodable bytes for diagnostics. A task in this state schedules **no**
     /// reminders and is surfaced for manual repair — decode failure is explicit,

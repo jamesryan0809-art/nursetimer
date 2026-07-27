@@ -56,10 +56,12 @@ struct PatientDetailView: View {
             if patient.tasks.isEmpty {
                 Section { Text("No medications, tasks, or reminders yet.").foregroundStyle(.secondary) }
             }
-            // Grouped by kind; Reminders at the bottom (feedback pass 4, item 3).
+            // Grouped by kind; Reminders at the bottom (feedback pass 4, item 3). Reminders split
+            // into scheduled ones and a "No time" checklist for unscheduled ones (pass 5, item 1).
             taskSection("Medications", kind: .medication)
             taskSection("Care tasks", kind: .generic)
-            taskSection("Reminders", kind: .reminder)
+            taskSection("Reminders", kind: .reminder) { !$0.isUnscheduled }
+            taskSection("Reminders · no time", kind: .reminder) { $0.isUnscheduled }
 
             completedTodaySection
 
@@ -110,10 +112,12 @@ struct PatientDetailView: View {
         }
     }
 
-    /// A kind-grouped section of task rows, rendered only when the patient has tasks of that kind.
+    /// A kind-grouped section of task rows, rendered only when the patient has matching tasks.
+    /// `filter` lets a kind be split across sections (e.g. scheduled vs "No time" reminders).
     @ViewBuilder
-    private func taskSection(_ title: String, kind: TaskKind) -> some View {
-        let items = tasks(of: kind)
+    private func taskSection(_ title: String, kind: TaskKind,
+                             where filter: (CareTask) -> Bool = { _ in true }) -> some View {
+        let items = tasks(of: kind).filter(filter)
         if !items.isEmpty {
             Section(title) {
                 ForEach(items) { task in
