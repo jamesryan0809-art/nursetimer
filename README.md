@@ -137,24 +137,33 @@ Xcode 16+ must complete each item.
   destination (`$(CONTENTS_FOLDER_PATH)/Watch`).
 - ⬜ **Info.plist keys (post-build-day):** `CFBundleExecutable = $(EXECUTABLE_NAME)` now present
   in App/Watch/Widget plists (installer required it). Confirm all three targets install.
-- ✅ **Watch install "app cannot be installed at this time" — config ruled out (feedback pass 5,
-  item 4).** Repo-side audit found: bundle-id nesting correct (`com.nursetimer.app` /
-  `.app.watch` / `.app.watch.widget`); `WKCompanionAppBundleIdentifier` = `com.nursetimer.app`
-  matches the iOS app; watchOS deployment target 10.0; widget has no entitlements. **Root cause
-  was the `com.apple.developer.usernotifications.time-sensitive` entitlement** (present in both
-  App and Watch entitlements) — a **personal/free Apple team cannot sign it**, which surfaces
-  on-device as "app cannot be installed." The Mac already **removed it from both** (commit
-  `b61cac0`); both entitlements files are now empty `<dict/>`. No code change needed — the
-  scheduler still sets `.timeSensitive` interruption level, which **degrades to normal delivery**
-  without the entitlement (no crash). **Trade-off:** time-sensitive notifications won't break
-  through Focus/Do-Not-Disturb until a **paid** team re-adds the capability.
-- ⬜ **Watch install — remaining device-side checks (feedback pass 5, item 4):** with the
-  entitlement removed, on the actual devices confirm: a **paid**-vs-free team is selected in Xcode
-  Signing (free team now signs, but re-adds nothing restricted); the paired watch runs **watchOS
-  ≥ 10.0**; the watch has **sufficient free storage**; the watch is **paired + unlocked** during
-  install; and after `make project` the app installs WITH `.app/Watch/` present. If a paid team
-  is used and time-sensitive break-through is wanted, re-add
-  `com.apple.developer.usernotifications.time-sensitive` to both entitlements.
+- ✅ **Install history — resolved (feedback pass 5→6).** The device install failures are behind
+  us: (a) "app cannot be installed at this time" was the `time-sensitive` entitlement a free team
+  couldn't sign — now **restored** under the paid team (pass 6 item 1); (b) "app could not be
+  installed" pushing to the watch was the free team choking on three nested bundle ids — the
+  widget, temporarily dropped, is now **re-enabled** (pass 6). A paid Apple Developer team is
+  active with `DEVELOPMENT_TEAM = 4U823JPF84` pinned in `project.yml`, so signing is automatic
+  for all targets.
+
+#### Distribution — TestFlight (feedback pass 6, item 4)
+Now that the paid Developer Program is active, distribute via **TestFlight** instead of sideloading
+development builds. This ends the free-tier weekly-rebuild ritual entirely.
+- ⬜ In Xcode: select **Any iOS Device**, **Product → Archive** (Release config). In the Organizer,
+  **Distribute App → App Store Connect → Upload**. The archive includes the watch app + widget.
+- ⬜ In **App Store Connect** → the app → **TestFlight**: once the build finishes processing, add
+  the nurse as an **internal tester** (App Store Connect user) — no UDIDs, no per-device
+  provisioning.
+- ⬜ On her iPhone: install the **TestFlight** app, accept the invite, and **Install** Nurse Timer.
+  The **watch app installs to the paired watch automatically** (or via the Watch app → Install);
+  no manual watch sideloading.
+- ✅ **Developer Mode and manual device registration no longer apply.** TestFlight builds are
+  Apple-signed and valid for **90 days** (vs. the free team's 7), distributed to any invited
+  tester's devices — so there's no Settings → Developer Mode toggle, no UDID registration, and no
+  weekly re-sign. (Developer Mode / device registration were only needed for the old free-team
+  sideload path.)
+- ⬜ Store metadata for review: display name **"Nurse Timer"**, the §1.2 "not a medical device"
+  disclaimer in the description, and the App Privacy questionnaire = **no data collected** (local
+  only, no networking).
 
 ### Core (already verified where noted)
 - ✅ Swift XCTest suite: **109 passed, 0 failures** (Swift 6.1.2, WSL) — re-run on Mac to confirm.
@@ -440,8 +449,8 @@ Xcode 16+ must complete each item.
 - ⬜ Light and dark appearance both correct (status colors only).
 - ⬜ iPhone simulator/device run; Watch simulator/device run.
 - ⬜ Complication/widget timelines render across accessory families.
-- ⬜ Signing, entitlements (Time-Sensitive **removed** for free-team install — pass 5 item 4),
-  bundle-id nesting, and companion-app config valid.
+- ⬜ Signing (paid team `4U823JPF84` pinned in `project.yml` base), entitlements (Time-Sensitive
+  **restored** — pass 6 item 1), bundle-id nesting, and companion-app config valid.
 - ⬜ No network traffic generated anywhere (spec §10 / §1.2) — verify with a proxy/Network report.
 
 ### Behavior Core enforces that the UI must honor
