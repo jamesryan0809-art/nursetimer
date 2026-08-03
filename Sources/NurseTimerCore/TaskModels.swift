@@ -219,7 +219,7 @@ public struct TaskSnapshot: SchedulableTask, Equatable, Sendable {
 }
 
 /// Global scheduling parameters. Defaults mirror spec §3.4 / §4.3.
-public struct SchedulerSettings: Equatable, Sendable {
+public struct SchedulerSettings: Equatable, Sendable, Codable {
     /// Minutes before due to fire the pre-alert. Spec default 15.
     public var defaultLeadTimeMinutes: Int
     /// Minutes between re-pings. Spec default 3.
