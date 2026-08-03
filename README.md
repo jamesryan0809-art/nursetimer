@@ -120,6 +120,15 @@ Xcode 16+ must complete each item.
   inherit); bundle IDs (`com.nursetimer.app` / `.watch` / `.watch.widget`), entitlements
   (time-sensitive restored), and companion config valid.
 - ⬜ App icon renders on iOS, Watch, and Widget (generated from `Icon/AppIcon.svg`).
+- ⬜ **Release readiness (feedback pass 6, item 3):** archive each target in the **Release**
+  configuration (XcodeGen's default Debug/Release; no Release-hostile overrides in `project.yml`).
+  Marketing version **1.0** / build **1** (`MARKETING_VERSION`/`CURRENT_PROJECT_VERSION` in base,
+  referenced by all three Info.plists). App-icon catalogs are **single-size 1024×1024 universal**
+  per platform (App = `ios`, Watch/Widget = `watchos`) — verified **opaque, no alpha/tRNS**
+  (App Store rejects transparent icons); actool derives all required iOS + watchOS sizes from the
+  1024 at build. `Icon/generate-icons.sh` now **requires** a flattener and **fails** if any icon
+  still has alpha. Confirm `xcodebuild -exportArchive` / Organizer validation passes for the
+  App Store.
 - ⬜ **Watch embedding (post-build-day):** iOS install previously failed with "Could not get
   contents of Watch directory" (embed temporarily disabled). Re-enabled with `embed: true` +
   `codeSign: true` on iOS→Watch and Watch→Widget. Confirm on Mac that `make project` builds
