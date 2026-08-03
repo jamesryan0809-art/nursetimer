@@ -122,7 +122,7 @@ Xcode 16+ must complete each item.
 - ⬜ App icon renders on iOS, Watch, and Widget (generated from `Icon/AppIcon.svg`).
 - ⬜ **Release readiness (feedback pass 6, item 3):** archive each target in the **Release**
   configuration (XcodeGen's default Debug/Release; no Release-hostile overrides in `project.yml`).
-  Marketing version **1.0** / build **1** (`MARKETING_VERSION`/`CURRENT_PROJECT_VERSION` in base,
+  Marketing version **1.0** / build **3** (`MARKETING_VERSION`/`CURRENT_PROJECT_VERSION` in base,
   referenced by all three Info.plists). App-icon catalogs are **single-size 1024×1024 universal**
   per platform (App = `ios`, Watch/Widget = `watchos`) — verified **opaque, no alpha/tRNS**
   (App Store rejects transparent icons); actool derives all required iOS + watchOS sizes from the
@@ -137,6 +137,37 @@ Xcode 16+ must complete each item.
   destination (`$(CONTENTS_FOLDER_PATH)/Watch`).
 - ⬜ **Info.plist keys (post-build-day):** `CFBundleExecutable = $(EXECUTABLE_NAME)` now present
   in App/Watch/Widget plists (installer required it). Confirm all three targets install.
+- ⬜ **App Group (WatchConnectivity milestone):** `group.com.nursetimer.app` added to the Watch
+  and Widget entitlements. Register the group on the Apple Developer portal / confirm automatic
+  signing provisions it, so the watch app can write and the widget can read the complication
+  summary (`ComplicationStore`). Build number bumped to **3**.
+
+### WatchConnectivity sync milestone (§5.3 / §5.4 / §6.4) — **cannot be paired-tested here**
+Nothing below can be compiled or paired-tested in the authoring environment; verify each on a Mac
+with a paired watch:
+- ⬜ **Snapshot on first install:** fresh-install the paired watch app → it receives the phone's
+  snapshot and populates the Now view (no "sample data"), complication shows real counts.
+- ⬜ **Action round-trip — watch → phone:** Given / Snooze / Skip Once on the watch applies on the
+  phone (TaskEvent recorded, next-due recomputed, phone toast) and the watch reconciles (row
+  clears / pending indicator drops) when the fresh snapshot returns.
+- ⬜ **Action round-trip — phone → watch:** act on the phone → the watch Now view + complication
+  update on the next snapshot.
+- ⬜ **Conflict scenario:** act on BOTH devices near-simultaneously (e.g. Snooze on watch + Given
+  on phone at ~the same second) → Given wins (last-by-timestamp; Given supersedes Snooze at a tie);
+  no double-apply, no lost action.
+- ⬜ **Watch pings with phone dead/absent:** put the phone in Airplane mode / power off → the watch
+  still fires its own locally-scheduled notifications from the last snapshot (§5.4).
+- ⬜ **Dedup:** with both devices present, a due task may buzz on both — acceptable (identical
+  identifiers, no suppression). Confirm no *duplicate on the same device*.
+- ⬜ **Cancellation:** Given/Skip on either device clears the stale pings on BOTH within a snapshot
+  cycle.
+- ⬜ **Shift Review discharge cancels notifications:** discharge a patient in Shift Review →
+  its tasks leave the Board/Schedule, pending notifications are cancelled, history is retained,
+  and the patient appears in the inactive Archive (restorable).
+- ⬜ **Staleness indicator:** background the phone / go out of range >2h (or unreachable) → the
+  watch shows the staleness banner; a newer-schema snapshot shows the "update the app" state.
+- ⬜ **Pending survives relaunch:** queue a watch action while unreachable, force-quit the watch
+  app, relaunch → the pending indicator is still shown until the phone confirms.
 - ✅ **Install history — resolved (feedback pass 5→6).** The device install failures are behind
   us: (a) "app cannot be installed at this time" was the `time-sensitive` entitlement a free team
   couldn't sign — now **restored** under the paid team (pass 6 item 1); (b) "app could not be
