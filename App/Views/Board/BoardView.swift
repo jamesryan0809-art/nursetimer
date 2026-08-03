@@ -26,6 +26,7 @@ struct BoardView: View {
     @State private var addingPatient = false
     @State private var showingSettings = false
     @State private var showingReductionInfo = false
+    @State private var showingShiftReview = false
 
     private var now: Date { .now }
     private var settings: AppSettings { store.settings() }
@@ -95,6 +96,7 @@ struct BoardView: View {
             .navigationDestination(for: Patient.self) { PatientDetailView(patient: $0) }
             .sheet(isPresented: $addingPatient) { NavigationStack { PatientFormView(patient: nil) } }
             .sheet(isPresented: $showingSettings) { SettingsView(settings: store.settings()) }
+            .sheet(isPresented: $showingShiftReview) { ShiftReviewView(patients: activePatients) }
             // Persistent, tappable reduction indicator (feedback item 2) — replaces the blocking
             // top banner; tapping re-shows the details.
             .alert(store.reduction.headline, isPresented: $showingReductionInfo) {
@@ -112,6 +114,13 @@ struct BoardView: View {
                             Label("Reminders adjusted", systemImage: "bell.badge")
                         }
                         .accessibilityLabel("Reminders adjusted — tap for details")
+                    }
+                }
+                if !activePatients.isEmpty {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button { showingShiftReview = true } label: {
+                            Label("Start Shift Review", systemImage: "list.clipboard")
+                        }
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {

@@ -412,6 +412,17 @@ final class NurseStore {
         commit()
     }
 
+    /// Discharge a patient during Shift Review (spec §6.4). A SOFT archive that reuses the
+    /// task-level archive pattern: the patient leaves the active lists and ALL its tasks are
+    /// excluded from planning — `planningTasks()` only feeds active patients, so the `commit()`→
+    /// `replan()` cancels their pending notifications — while the patient, its tasks, and every
+    /// `TaskEvent` are retained (NEVER a hard delete). Restorable from the inactive-patients
+    /// Archive list. The named entry point documents the §6.4 semantics; it soft-archives via the
+    /// same `isActive` flag the Archive list already uses.
+    func dischargePatient(_ patient: Patient) {
+        setPatientActive(patient, false)
+    }
+
     /// True if another active patient already occupies this room (spec §8 warn-on-save).
     func roomIsOccupied(_ room: String, excluding patient: Patient? = nil) -> Bool {
         activePatients().contains { $0.roomNumber == room && $0.id != patient?.id }
