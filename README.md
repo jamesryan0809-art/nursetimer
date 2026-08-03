@@ -113,14 +113,12 @@ Xcode 16+ must complete each item.
 - ⬜ Swift package dependencies (`NurseTimerCore`, `NurseTimerModels`) resolve.
 - ⬜ iOS app target compiles.
 - ⬜ watchOS app target compiles.
-- 🚫 **Watch widget extension DISABLED (feedback pass 5)** — temporarily removed from the build
-  so a free/personal Apple team can install the watch app onto the device (three nested
-  code-signed bundle ids overwhelmed free-team provisioning → "This app could not be installed
-  at this time"; the watch itself is fine — watchOS 10.6.2, storage OK). It's a not-yet-live
-  stub; `Widget/` sources remain. Re-add the `NurseTimerWidget` target + embed dependency in
-  `project.yml` to restore it (best under a paid team).
-- ⬜ Signing teams selected locally; bundle IDs / entitlements / companion config valid (now
-  two bundle ids: `com.nursetimer.app` + `com.nursetimer.app.watch`).
+- ⬜ Widget extension compiles. **Re-enabled (feedback pass 6)** — the free-tier "drop the
+  widget" workaround is reverted now that the paid team can provision the third nested bundle id
+  (`com.nursetimer.app.watch.widget`). Still a not-yet-live stub (honest not-synced state).
+- ⬜ Signing: `DEVELOPMENT_TEAM = 4U823JPF84` is pinned in `project.yml` base (all targets
+  inherit); bundle IDs (`com.nursetimer.app` / `.watch` / `.watch.widget`), entitlements
+  (time-sensitive restored), and companion config valid.
 - ⬜ App icon renders on iOS, Watch, and Widget (generated from `Icon/AppIcon.svg`).
 - ⬜ **Watch embedding (post-build-day):** iOS install previously failed with "Could not get
   contents of Watch directory" (embed temporarily disabled). Re-enabled with `embed: true` +

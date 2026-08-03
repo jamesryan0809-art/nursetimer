@@ -9,10 +9,9 @@
 # Targets:
 #   NurseTimer         iOS app                 com.nursetimer.app
 #   NurseTimerWatch    watchOS companion app   com.nursetimer.app.watch
+#   NurseTimerWidget   WidgetKit extension     com.nursetimer.app.watch.widget
 #   NurseTimerAppTests iOS unit-test bundle    com.nursetimer.app.tests
 # Plus the local Swift package products NurseTimerCore / NurseTimerModels.
-# (NurseTimerWidget — watch WidgetKit extension — is temporarily disabled for free-team
-#  install; see the DISABLED block below. Widget/ sources remain in the repo.)
 
 name: NurseTimer
 
@@ -81,12 +80,11 @@ targets:
     dependencies:
       - package: NurseTimer
         product: NurseTimerCore
-      # NOTE: the watch WidgetKit extension (NurseTimerWidget) is intentionally NOT embedded
-      # right now. A free/personal Apple team can't reliably provision the third nested bundle
-      # id (com.nursetimer.app.watch.widget), which blocked installing the watch app onto the
-      # device ("This app could not be installed at this time"). The widget is a not-yet-live
-      # stub, so app + watch app (two bundle ids) is enough. To restore it later (paid team),
-      # re-add the NurseTimerWidget target below and this embed dependency.
+      # Nest the WidgetKit extension inside the watch app (PlugIns), code-signed on copy.
+      # (Re-enabled under the paid team — the free-tier "drop the widget" workaround is reverted.)
+      - target: NurseTimerWidget
+        embed: true
+        codeSign: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nursetimer.app.watch
@@ -96,23 +94,21 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Watch/NurseTimerWatch.entitlements
 
   # ──────────────────── WidgetKit extension (watch) ──────────────────────
-  # DISABLED (feedback pass 5): the watch widget/complication extension is temporarily removed
-  # from the build so a free/personal Apple team can install the watch app (three nested
-  # code-signed bundle ids overwhelmed free-team provisioning). The `Widget/` sources remain in
-  # the repo; re-add this target block + the embed dependency in NurseTimerWatch to restore it
-  # (best under a paid team). Original definition:
-  #   NurseTimerWidget:
-  #     type: app-extension
-  #     platform: watchOS
-  #     deploymentTarget: "10.0"
-  #     sources: [ { path: Widget } ]
-  #     dependencies: [ { package: NurseTimer, product: NurseTimerCore } ]
-  #     settings:
-  #       base:
-  #         PRODUCT_BUNDLE_IDENTIFIER: com.nursetimer.app.watch.widget
-  #         PRODUCT_NAME: NurseTimerWidget
-  #         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-  #         INFOPLIST_FILE: Widget/Info.plist
+  NurseTimerWidget:
+    type: app-extension
+    platform: watchOS
+    deploymentTarget: "10.0"
+    sources:
+      - path: Widget
+    dependencies:
+      - package: NurseTimer
+        product: NurseTimerCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nursetimer.app.watch.widget
+        PRODUCT_NAME: NurseTimerWidget
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_FILE: Widget/Info.plist
 
   # ─────────────────────── iOS unit-test bundle ──────────────────────────
   NurseTimerAppTests:
