@@ -2,11 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Time Sensitive notifications (spec §4.4). Restored under the paid Developer team. -->
-	<key>com.apple.developer.usernotifications.time-sensitive</key>
-	<true/>
-	<!-- Shared App Group: the watch app writes the complication summary here for the widget
-	     to read (BUILD_SPEC §5.1/§5.3). -->
+	<!-- Shared App Group: the widget reads the complication summary the watch app writes here
+	     (BUILD_SPEC §5.1/§5.3). -->
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.com.nursetimer.app</string>
