@@ -122,7 +122,7 @@ Xcode 16+ must complete each item.
 - ⬜ App icon renders on iOS, Watch, and Widget (generated from `Icon/AppIcon.svg`).
 - ⬜ **Release readiness (feedback pass 6, item 3):** archive each target in the **Release**
   configuration (XcodeGen's default Debug/Release; no Release-hostile overrides in `project.yml`).
-  Marketing version **1.0** / build **3** (`MARKETING_VERSION`/`CURRENT_PROJECT_VERSION` in base,
+  Marketing version **1.0** / build **4** (`MARKETING_VERSION`/`CURRENT_PROJECT_VERSION` in base,
   referenced by all three Info.plists). App-icon catalogs are **single-size 1024×1024 universal**
   per platform (App = `ios`, Watch/Widget = `watchos`) — verified **opaque, no alpha/tRNS**
   (App Store rejects transparent icons); actool derives all required iOS + watchOS sizes from the
@@ -168,6 +168,21 @@ with a paired watch:
   watch shows the staleness banner; a newer-schema snapshot shows the "update the app" state.
 - ⬜ **Pending survives relaunch:** queue a watch action while unreachable, force-quit the watch
   app, relaunch → the pending indicator is still shown until the phone confirms.
+
+#### Sync-fix pass (first-snapshot delivery + diagnostics)
+- ⬜ **Fresh-install first-snapshot arrival within seconds:** install the watch app, foreground
+  BOTH apps adjacent → the Now view populates within a few seconds (via the activation/watch-state
+  push and the watch's launch pull), not an eternal empty state.
+- ⬜ **Snapshot after a phone-side commit with the watch backgrounded:** act on the phone while the
+  watch app is backgrounded → the update lands on the next watch wake (foreground pull /
+  applicationContext).
+- ⬜ **Diagnostics populated on both devices:** watch Now toolbar → **Sync** shows activated /
+  reachable / a recent "Last received" / task count; phone Settings → Watch → **Sync diagnostics**
+  shows activated, installed=yes, a recent "Last push", and "context ok". A break shows exactly
+  which line is wrong (e.g. installed=no, or "skipped: not activated", or a decode error).
+- ⬜ **Watch pings after the first-ever snapshot with no further phone interaction:** after the
+  first snapshot arrives, background the phone entirely → the watch still fires its own locally-
+  scheduled notifications from that snapshot (§5.4).
 - ✅ **Install history — resolved (feedback pass 5→6).** The device install failures are behind
   us: (a) "app cannot be installed at this time" was the `time-sensitive` entitlement a free team
   couldn't sign — now **restored** under the paid team (pass 6 item 1); (b) "app could not be
