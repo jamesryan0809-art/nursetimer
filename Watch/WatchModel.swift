@@ -43,6 +43,9 @@ final class WatchModel {
 
     var lastSyncedAt: Date? { snapshot.generatedAt }
 
+    /// Live sync-status readout for the diagnostics screen (item 2g).
+    var diagnostics: SyncDiagnostics { transport.diagnostics }
+
     /// A row with an unconfirmed local action (§5.3) — the view shows a subtle pending mark.
     func isPending(_ task: WatchTask) -> Bool { transport.pendingTaskIDs.contains(task.id) }
 

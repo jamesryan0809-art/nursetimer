@@ -10,7 +10,14 @@ import UIKit
 /// paired, and whether NurseTimer is actually installed on the watch via WatchConnectivity) and
 /// gives tap-to-open Settings buttons plus the exact tap-paths for the toggles we can't reach.
 struct WatchSetupView: View {
+    @Environment(AppModel.self) private var app
     @State private var model = WatchSetupModel()
+
+    /// Pairing / install status comes from the shared `WatchSyncCoordinator` (the single
+    /// `WCSession` delegate) — this screen must NOT install a second delegate, which would steal
+    /// the slot and break snapshot delivery.
+    private var watchPaired: WatchSetupModel.Check { app.watchSync.isPaired ? .ok : .needsAction }
+    private var watchAppInstalled: WatchSetupModel.Check { app.watchSync.isWatchAppInstalled ? .ok : .needsAction }
 
     var body: some View {
         List {
@@ -24,11 +31,24 @@ struct WatchSetupView: View {
                           fix: model.openNotificationSettings)
                 StatusRow(title: "Time-Sensitive alerts on", state: model.timeSensitive,
                           fix: model.openNotificationSettings)
-                StatusRow(title: "Apple Watch paired", state: model.watchPaired, fix: nil)
-                StatusRow(title: "NurseTimer installed on watch", state: model.watchAppInstalled, fix: nil)
-                Button { Task { await model.refresh() } } label: {
+                StatusRow(title: "Apple Watch paired", state: watchPaired, fix: nil)
+                StatusRow(title: "NurseTimer installed on watch", state: watchAppInstalled, fix: nil)
+                Button { Task { await model.refresh() }; app.watchSync.pushSnapshot(reason: "manual re-check") } label: {
                     Label("Re-check", systemImage: "arrow.clockwise")
                 }
+            }
+
+            // Sync diagnostics mirror (item 2g) — the phone half of the on-device readout.
+            Section("Sync diagnostics") {
+                LabeledContent("Session", value: app.watchSync.activationDescription)
+                LabeledContent("Watch app installed", value: app.watchSync.isWatchAppInstalled ? "yes" : "no")
+                LabeledContent("Reachable", value: app.watchSync.isReachable ? "yes" : "no")
+                LabeledContent("Last push", value: app.watchSync.lastPushAt.map { $0.formatted(date: .omitted, time: .standard) } ?? "never")
+                LabeledContent("Last result", value: app.watchSync.lastPushOutcome)
+                if let error = app.watchSync.lastError {
+                    Text(error).font(.caption2).foregroundStyle(.red)
+                }
+                Button("Push snapshot now") { app.watchSync.pushSnapshot(reason: "manual push") }
             }
 
             Section("Set it up") {
@@ -145,10 +165,6 @@ final class WatchSetupModel {
 
     var notifications: Check = .unknown
     var timeSensitive: Check = .unknown
-    var watchPaired: Check = .unknown
-    var watchAppInstalled: Check = .unknown
-
-    private var probe: WatchConnectivityProbe?
 
     func refresh() async {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
@@ -159,7 +175,6 @@ final class WatchSetupModel {
         case .disabled: timeSensitive = .needsAction
         default:        timeSensitive = .unknown   // .notSupported → not applicable
         }
-        startWatchProbe()
     }
 
     /// Opens NurseTimer's own notification settings (iOS 16+), falling back to the app's
@@ -174,52 +189,4 @@ final class WatchSetupModel {
             }
         }
     }
-
-    private func startWatchProbe() {
-        guard WCSession.isSupported() else {
-            watchPaired = .unknown; watchAppInstalled = .unknown; return
-        }
-        let probe = WatchConnectivityProbe { [weak self] paired, installed in
-            Task { @MainActor in
-                self?.watchPaired = paired ? .ok : .needsAction
-                self?.watchAppInstalled = installed ? .ok : .needsAction
-            }
-        }
-        self.probe = probe
-        probe.start()
-    }
-}
-
-/// Minimal `WCSession` activation to read `isPaired` / `isWatchAppInstalled` (iOS-only). Kept
-/// separate from the @Observable model so the delegate conformance stays simple; results are
-/// delivered on the main actor via the callback. This is a read-only probe — it sends nothing
-/// and is independent of the (still-stubbed) data-sync milestone.
-private final class WatchConnectivityProbe: NSObject, WCSessionDelegate {
-    private let onUpdate: (_ paired: Bool, _ installed: Bool) -> Void
-
-    init(onUpdate: @escaping (Bool, Bool) -> Void) {
-        self.onUpdate = onUpdate
-        super.init()
-    }
-
-    func start() {
-        guard WCSession.isSupported() else { return }
-        let session = WCSession.default
-        session.delegate = self
-        if session.activationState == .activated {
-            onUpdate(session.isPaired, session.isWatchAppInstalled)
-        } else {
-            session.activate()
-        }
-    }
-
-    func session(_ session: WCSession,
-                 activationDidCompleteWith activationState: WCSessionActivationState,
-                 error: Error?) {
-        onUpdate(session.isPaired, session.isWatchAppInstalled)
-    }
-
-    // Required iOS delegate stubs; a deactivated session is reactivated by the system on demand.
-    func sessionDidBecomeInactive(_ session: WCSession) {}
-    func sessionDidDeactivate(_ session: WCSession) {}
 }

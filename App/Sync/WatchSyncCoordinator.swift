@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import NurseTimerCore
 import NurseTimerModels
 #if canImport(WatchConnectivity)
@@ -7,18 +8,29 @@ import WatchConnectivity
 
 /// Phone side of the phone↔watch link (BUILD_SPEC §5.3). The phone is the source of truth:
 ///
-///  - On every store commit it pushes a full versioned `SyncSnapshot` to the watch via
-///    `updateApplicationContext` (always-latest, coalescing), with `transferUserInfo` as the
-///    durable fallback when the context payload is rejected (too large / not yet paired).
-///  - Watch actions arrive via `didReceiveMessage` (reachable) or `didReceiveUserInfo` (queued);
-///    they are ordered by the Core conflict rule and applied through the EXISTING `NurseStore`
-///    paths, so TaskEvents, on-phone toasts, replanning, and the transactional commit guarantees
-///    all apply unchanged. Applying an action commits → replans → pushes the fresh snapshot back.
+///  - It pushes a full versioned `SyncSnapshot` via `updateApplicationContext` (always-latest,
+///    coalescing) with `transferUserInfo` as the durable fallback. Crucially it pushes NOT ONLY
+///    on store commits but also when the session activates and whenever the watch state changes
+///    (a watch paired/installed after the last commit would otherwise wait forever).
+///  - It answers a watch "send me the current snapshot" pull in the `sendMessage` reply handler.
+///  - Watch actions arrive via `didReceiveMessage` / `didReceiveUserInfo`; they are ordered by the
+///    Core conflict rule and applied through the EXISTING `NurseStore` paths, then the fresh
+///    snapshot is pushed back.
 ///
 /// No networking beyond WatchConnectivity — the app's no-server property is untouched.
 @MainActor
+@Observable
 final class WatchSyncCoordinator: NSObject {
     private unowned let store: NurseStore
+
+    // MARK: Diagnostics (item 2g) — the phone mirror the Settings screen reads.
+    var lastPushAt: Date?
+    var lastPushOutcome: String = "—"
+    var lastError: String?
+    var activationDescription: String = "not activated"
+    var isPaired = false
+    var isWatchAppInstalled = false
+    var isReachable = false
 
     init(store: NurseStore) {
         self.store = store
@@ -27,18 +39,20 @@ final class WatchSyncCoordinator: NSObject {
 
     func activate() {
         #if canImport(WatchConnectivity)
-        guard WCSession.isSupported() else { return }
+        guard WCSession.isSupported() else { activationDescription = "unsupported"; return }
         let session = WCSession.default
         session.delegate = self
         session.activate()
+        #else
+        activationDescription = "unsupported (no WatchConnectivity)"
         #endif
     }
 
-    // MARK: Snapshot push
+    // MARK: Snapshot build + push
 
-    /// Build the current snapshot from the store's active, non-archived tasks. Paused/muted
-    /// tasks are included (the watch renders them with parity status and the shared planner
-    /// excludes them from reminders exactly like the phone); archived tasks never leave the phone.
+    /// Build the current snapshot from the store's active, non-archived tasks. Paused/muted tasks
+    /// are included (the watch renders them with parity status and the shared planner excludes them
+    /// exactly like the phone); archived tasks never leave the phone.
     func buildSnapshot() -> SyncSnapshot {
         let settings = store.settings()
         let tasks = store.planningTasks()
@@ -50,38 +64,76 @@ final class WatchSyncCoordinator: NSObject {
             settings: settings.schedulerSettings)
     }
 
-    /// Push the latest snapshot. Called from `NurseStore.replan()` after every commit.
-    func pushSnapshot() {
+    /// Encode the snapshot to plist-safe `Data`, surfacing (not swallowing) an encode failure.
+    private func encodedSnapshot() -> Data? {
+        do {
+            return try JSONEncoder().encode(buildSnapshot())
+        } catch {
+            let msg = "snapshot encode failed: \(error.localizedDescription)"
+            AppLog.notifications.error("\(msg, privacy: .public)")
+            lastError = msg
+            lastPushOutcome = "encode error"
+            return nil
+        }
+    }
+
+    /// Push the latest snapshot. Called from `NurseStore.replan()` (every commit) and on
+    /// activation / watch-state / reachability changes.
+    func pushSnapshot(reason: String = "commit") {
         #if canImport(WatchConnectivity)
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
-        guard session.activationState == .activated else { return }
-        guard let data = try? JSONEncoder().encode(buildSnapshot()) else { return }
+        refreshState(session)
+        guard session.activationState == .activated else {
+            lastPushOutcome = "skipped: not activated (\(reason))"
+            return
+        }
+        guard let data = encodedSnapshot() else { return }
         do {
-            // Latest-state channel: the OS coalesces to the newest, ideal for "current snapshot".
+            // `Data` is a property-list type, so the context payload is always plist-safe.
             try session.updateApplicationContext([Self.snapshotKey: data])
+            lastPushAt = .now
+            lastPushOutcome = "context ok (\(reason), \(data.count)B)"
+            lastError = nil
         } catch {
-            // Durable fallback for an oversized/queued payload — WC persists and retries this.
+            // Durable fallback — WC persists and retries this across launches.
             AppLog.notifications.error("applicationContext push failed: \(error.localizedDescription, privacy: .public)")
             session.transferUserInfo([Self.snapshotKey: data])
+            lastPushAt = .now
+            lastPushOutcome = "context failed → transferUserInfo (\(reason))"
+            lastError = error.localizedDescription
         }
         #endif
     }
 
     static let snapshotKey = "snapshot"
     static let actionsKey = "actions"
+    static let requestKey = "requestSnapshot"
+
+    #if canImport(WatchConnectivity)
+    private func refreshState(_ session: WCSession) {
+        switch session.activationState {
+        case .activated:      activationDescription = "activated"
+        case .inactive:       activationDescription = "inactive"
+        case .notActivated:   activationDescription = "notActivated"
+        @unknown default:     activationDescription = "unknown"
+        }
+        isPaired = session.isPaired
+        isWatchAppInstalled = session.isWatchAppInstalled
+        isReachable = session.isReachable
+    }
+    #endif
 
     // MARK: Incoming watch actions
 
     private func applyIncoming(_ data: Data) {
         guard let batch = try? JSONDecoder().decode(SyncActionBatch.self, from: data) else {
+            lastError = "could not decode watch action batch"
             AppLog.notifications.error("Could not decode watch action batch")
             return
         }
         // Conflict rule §5.3: last-by-timestamp wins; Given supersedes Snooze at equal time.
-        for action in SyncConflictResolver.applicationOrder(batch.actions) {
-            apply(action)
-        }
+        for action in SyncConflictResolver.applicationOrder(batch.actions) { apply(action) }
         // Each apply() commits→replans→pushes a fresh snapshot, so the watch reconciles.
     }
 
@@ -98,26 +150,48 @@ final class WatchSyncCoordinator: NSObject {
 #if canImport(WatchConnectivity)
 extension WatchSyncCoordinator: WCSessionDelegate {
     // WC delegate callbacks arrive off the main actor; hop to @MainActor before touching the store,
-    // carrying only the Sendable `Data` payload across the boundary.
+    // carrying only Sendable payloads across the boundary.
 
     nonisolated func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState,
                              error: Error?) {
-        // On (re)activation, push the current state so a freshly-paired watch is populated at once.
-        Task { @MainActor in self.pushSnapshot() }
+        // Push the current state as soon as the session is up — a watch installed after the last
+        // commit is populated immediately (item 2b, the most likely first-snapshot root cause).
+        Task { @MainActor in
+            if let error { self.lastError = "activation: \(error.localizedDescription)" }
+            self.pushSnapshot(reason: "activation")
+        }
     }
 
     nonisolated func sessionDidBecomeInactive(_ session: WCSession) {}
     nonisolated func sessionDidDeactivate(_ session: WCSession) {
-        // Reactivate for the next paired watch (Apple's required re-activation dance).
-        session.activate()
+        session.activate()   // reactivate for the next paired watch (Apple's required dance)
+    }
+
+    nonisolated func sessionWatchStateDidChange(_ session: WCSession) {
+        // isPaired / isWatchAppInstalled just changed — a newly-installed watch needs the snapshot
+        // NOW rather than at the next commit (item 2b).
+        Task { @MainActor in self.pushSnapshot(reason: "watchStateChanged") }
     }
 
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any],
                              replyHandler: @escaping ([String: Any]) -> Void) {
+        // A watch pull (item 2c): reply with the full snapshot in the reply handler.
+        if message[Self.requestKey] != nil {
+            Task { @MainActor in
+                if let data = self.encodedSnapshot() {
+                    self.lastPushAt = .now
+                    self.lastPushOutcome = "replied to pull (\(data.count)B)"
+                    replyHandler([Self.snapshotKey: data])
+                } else {
+                    replyHandler(["error": "encode"])
+                }
+            }
+            return
+        }
         if let data = message[Self.actionsKey] as? Data {
             Task { @MainActor in self.applyIncoming(data) }
         }
-        replyHandler(["ack": true])   // lets the watch mark the send delivered
+        replyHandler(["ack": true])
     }
 
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
@@ -127,8 +201,7 @@ extension WatchSyncCoordinator: WCSessionDelegate {
     }
 
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
-        // When the watch becomes reachable, re-push so it can't sit on a stale snapshot.
-        Task { @MainActor in self.pushSnapshot() }
+        Task { @MainActor in self.pushSnapshot(reason: "reachabilityChanged") }
     }
 }
 #endif

@@ -29,8 +29,28 @@ struct NowView: View {
             }
             .navigationTitle("Now")
             .navigationDestination(for: WatchTask.self) { TaskDetailView(task: $0) }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink { SyncStatusView() } label: {
+                        Image(systemName: syncGlyph).foregroundStyle(syncTint)
+                    }
+                    .accessibilityLabel("Sync status")
+                }
+            }
             .onAppear { model.refresh() }
         }
+    }
+
+    /// A tiny, always-visible sync affordance whose glyph reflects the current link health.
+    private var syncGlyph: String {
+        if model.needsAppUpdate { return "exclamationmark.arrow.triangle.2.circlepath" }
+        if model.isStale() { return "iphone.slash" }
+        return model.isSynced ? "iphone.and.arrow.forward" : "iphone.gen1"
+    }
+    private var syncTint: Color {
+        if model.needsAppUpdate { return .orange }
+        if model.isStale() { return .secondary }
+        return model.isSynced ? .green : .secondary
     }
 }
 

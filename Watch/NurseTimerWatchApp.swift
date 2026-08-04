@@ -7,6 +7,7 @@ import SwiftUI
 @main
 struct NurseTimerWatchApp: App {
     @State private var model: WatchModel
+    @Environment(\.scenePhase) private var scenePhase
     private let notifications = WatchNotificationScheduler()
 
     init() {
@@ -25,6 +26,10 @@ struct NurseTimerWatchApp: App {
     var body: some Scene {
         WindowGroup {
             NowView().environment(model)
+                .onChange(of: scenePhase) { _, phase in
+                    // Pull the latest snapshot on every foreground (item 2c) — belt to the phone's push.
+                    if phase == .active { model.refresh() }
+                }
         }
         WKNotificationScene(controller: NotificationController.self, category: "NT_TASK")
     }

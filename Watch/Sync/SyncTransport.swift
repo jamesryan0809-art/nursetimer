@@ -153,6 +153,16 @@ protocol SyncTransport: AnyObject {
 extension SyncTransport {
     var pendingTaskIDs: Set<UUID> { [] }
     var phoneUnreachable: Bool { false }
+    var diagnostics: SyncDiagnostics { SyncDiagnostics() }
+}
+
+/// A discreet, permanent sync-status readout (item 2g) so the next on-device session reads the
+/// break point directly instead of guessing.
+struct SyncDiagnostics {
+    var activation = "n/a"
+    var reachable = false
+    var lastSnapshotAt: Date?
+    var lastError: String?
 }
 
 #if canImport(WatchConnectivity)
@@ -182,6 +192,25 @@ final class WCSessionSyncTransport: NSObject, SyncTransport {
     private var pendingActions: [SyncAction] = []
     private let reschedule: (SyncSnapshot) -> Void
 
+    // Diagnostics (item 2g).
+    private var lastSnapshotAt: Date?
+    private var lastError: String?
+    var diagnostics: SyncDiagnostics {
+        var activation = "notActivated"
+        var reachable = false
+        if WCSession.isSupported() {
+            switch WCSession.default.activationState {
+            case .activated: activation = "activated"
+            case .inactive: activation = "inactive"
+            case .notActivated: activation = "notActivated"
+            @unknown default: activation = "unknown"
+            }
+            reachable = WCSession.default.isReachable
+        } else { activation = "unsupported" }
+        return SyncDiagnostics(activation: activation, reachable: reachable,
+                               lastSnapshotAt: lastSnapshotAt, lastError: lastError)
+    }
+
     private static let pendingKey = "nt.pendingActions.v1"
 
     /// `reschedule` is called after each accepted snapshot so the watch keeps its own local
@@ -195,7 +224,29 @@ final class WCSessionSyncTransport: NSObject, SyncTransport {
         WCSession.default.activate()
     }
 
-    func refresh() { onChange?() }
+    /// Called on launch / foreground (NowView.onAppear). Belt-and-suspenders to the phone's push:
+    /// actively PULL the current snapshot so a watch launched after the phone's last commit doesn't
+    /// wait forever (item 2c).
+    func refresh() {
+        requestSnapshot()
+        onChange?()
+    }
+
+    /// Ask the phone for the current snapshot; it replies with the full snapshot in the reply
+    /// handler. Only possible while reachable — otherwise the phone's applicationContext push is
+    /// the delivery path.
+    private func requestSnapshot() {
+        guard WCSession.isSupported() else { return }
+        let session = WCSession.default
+        guard session.activationState == .activated, session.isReachable else { return }
+        session.sendMessage([WCSessionKeys.request: true], replyHandler: { [weak self] reply in
+            if let data = reply[WCSessionKeys.snapshot] as? Data {
+                DispatchQueue.main.async { self?.ingest(data) }
+            }
+        }, errorHandler: { [weak self] error in
+            DispatchQueue.main.async { self?.lastError = "pull: \(error.localizedDescription)"; self?.onChange?() }
+        })
+    }
 
     // MARK: Sending actions
 
@@ -253,13 +304,26 @@ final class WCSessionSyncTransport: NSObject, SyncTransport {
     // MARK: Receiving snapshots
 
     private func ingest(_ data: Data) {
-        guard let snap = try? JSONDecoder().decode(SyncSnapshot.self, from: data) else { return }
-        if snap.isNewerThanSupported {
-            // Never render partial/unknown data — surface an "update the app" state instead.
+        let snap: SyncSnapshot
+        do {
+            snap = try JSONDecoder().decode(SyncSnapshot.self, from: data)
+        } catch {
+            // A hard decode failure is almost always a schema/encoding mismatch — surface the
+            // "update the app" state (item 2e), never leave an eternal empty screen unexplained.
+            lastError = "decode failed: \(error.localizedDescription)"
             state = .needsUpdate
             onChange?()
             return
         }
+        if snap.isNewerThanSupported {
+            // Never render partial/unknown data — surface an "update the app" state instead.
+            lastError = "phone schema v\(snap.schemaVersion) > supported v\(SyncSchema.currentVersion)"
+            state = .needsUpdate
+            onChange?()
+            return
+        }
+        lastError = nil
+        lastSnapshotAt = Date()
         defaultLead = snap.settings.defaultLeadTimeMinutes
         let now = Date()
         snapshot = WatchSnapshot(
@@ -268,7 +332,8 @@ final class WCSessionSyncTransport: NSObject, SyncTransport {
         state = .synced(snap.generatedAt)
         // Confirm pending actions the phone has now processed (its snapshot postdates them).
         reconcilePending(against: snap)
-        // Keep the watch's own local notifications in step with the fresh snapshot (item 3).
+        // Keep the watch's own local notifications in step with the fresh snapshot (item 3) —
+        // fires on the FIRST snapshot, not only on diffs.
         reschedule(snap)
         onChange?()
     }
@@ -299,15 +364,22 @@ final class WCSessionSyncTransport: NSObject, SyncTransport {
 enum WCSessionKeys {
     static let snapshot = "snapshot"
     static let actions = "actions"
+    static let request = "requestSnapshot"
 }
 
 extension WCSessionSyncTransport: WCSessionDelegate {
     func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState,
                  error: Error?) {
-        // On activation the phone re-pushes; also pick up any applicationContext already waiting.
+        if let error {
+            DispatchQueue.main.async { self.lastError = "activation: \(error.localizedDescription)"; self.onChange?() }
+        }
+        // Pick up any applicationContext already waiting from before this launch...
         if let data = session.receivedApplicationContext[WCSessionKeys.snapshot] as? Data {
             DispatchQueue.main.async { self.ingest(data) }
         }
+        // ...and actively pull the latest, so a watch launched after the phone's last commit is
+        // populated immediately (item 2c) rather than waiting for the next push.
+        DispatchQueue.main.async { self.requestSnapshot() }
     }
 
     func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
