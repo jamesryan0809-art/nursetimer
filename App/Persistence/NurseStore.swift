@@ -54,6 +54,10 @@ final class NurseStore {
     /// Centralized tap-to-act task-detail presentation (root presents the sheet). Any task
     /// row across Board / patient detail / Schedule / Grid sets this to open the action sheet.
     var taskDetailRequest: TaskDetailTarget?
+    /// Invoked at the END of every `replan()` — the single post-commit chokepoint. The watch-sync
+    /// coordinator hooks this to push the latest `SyncSnapshot` to the paired watch (§5.3). Nil
+    /// when no watch link is configured (e.g. previews/tests).
+    var onReplan: (() -> Void)?
 
     func task(withID id: UUID) -> CareTask? {
         fetch(FetchDescriptor<CareTask>(predicate: #Predicate { $0.id == id }), "task").first
@@ -408,6 +412,17 @@ final class NurseStore {
         commit()
     }
 
+    /// Discharge a patient during Shift Review (spec §6.4). A SOFT archive that reuses the
+    /// task-level archive pattern: the patient leaves the active lists and ALL its tasks are
+    /// excluded from planning — `planningTasks()` only feeds active patients, so the `commit()`→
+    /// `replan()` cancels their pending notifications — while the patient, its tasks, and every
+    /// `TaskEvent` are retained (NEVER a hard delete). Restorable from the inactive-patients
+    /// Archive list. The named entry point documents the §6.4 semantics; it soft-archives via the
+    /// same `isActive` flag the Archive list already uses.
+    func dischargePatient(_ patient: Patient) {
+        setPatientActive(patient, false)
+    }
+
     /// True if another active patient already occupies this room (spec §8 warn-on-save).
     func roomIsOccupied(_ room: String, excluding patient: Patient? = nil) -> Bool {
         activePatients().contains { $0.roomNumber == room && $0.id != patient?.id }
@@ -527,6 +542,9 @@ final class NurseStore {
             groupCount: plan.coalescedGroupCount,
             tailsTrimmed: plan.reduction.chainDepthReduced > 0)
         scheduler.apply(plan: plan, displays: displays)
+        // Mirror the freshly-committed state to the watch (§5.3). Last step so the snapshot
+        // reflects everything above (nextDueAt, flags, settings).
+        onReplan?()
     }
 
     // MARK: Destructive maintenance (used by Settings in Milestone 3)

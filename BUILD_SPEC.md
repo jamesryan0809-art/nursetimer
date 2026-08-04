@@ -118,14 +118,24 @@ Due alerts and the five-ping chain floor are **never** touched. A realistic 8-ta
 
 ## 5. Apple Watch App
 
-### 5.1 Views **[skip-redesign]**
-- **Now view:** tasks sorted by urgency (OVERDUE → DUE≤15m → upcoming).
-- **Task detail:** actions are **Snooze**, **Given/Done**, **Skip Once**, and **Pause**.
+### 5.1 Views **[skip-redesign] [wc-sync]**
+- **Now view:** tasks sorted by urgency (OVERDUE → DUE≤15m → upcoming), bound to the **synced snapshot** (§5.3) with phone render parity — status colors, muted "Reminders off" badge, color-tag dot, PRN last-given. Shows an **empty** "All caught up" state, a **staleness** indicator only when the last snapshot is older than **2h** or the phone is unreachable, an **"update the app"** state when the phone sends a newer schema than the watch build understands (never misrenders unknown data), and a **per-row pending mark** while a local action is unconfirmed.
+- **Task detail:** actions are **Snooze** (dominant / first), **Given/Done**, and **Skip Once**.
   - **Skip Once** advances the schedule one occurrence and records a `.skipped` event; it executes immediately on tap. **No reason picker.**
-  - **Pause** holds the task (no reminders until resumed), records a `.paused` event, and is **visually subordinate/destructive, physically separated from Skip Once, and always confirmed** (the confirmation names the task and room).
+  - **Pause is phone-only** (the established design): it is **not** offered on the watch — a pause needs the confirmation + resume affordances that live on the phone.
+- **Complication / Smart Stack:** overdue count + next task, fed from the synced snapshot via a shared App Group (`group.com.nursetimer.app`) the watch app writes on each snapshot and the widget reads (fresh <2h, else "not synced").
 
 ### 5.2 Notification presentation **[skip-redesign]**
 Custom notification interface with actions **Snooze** (dominant / first), **Given/Done**, and **Skip Once**. **Pause is never offered from a notification.**
+
+### 5.3 Phone↔Watch sync (WatchConnectivity) **[wc-sync]**
+Device-to-device only — **no networking beyond WatchConnectivity** (the no-server property is untouched). **The phone is the source of truth.**
+- **Snapshot (phone → watch).** On every store commit the phone pushes a full **versioned `SyncSnapshot`** (Core, Foundation-only, shared by both platforms so the watch never re-implements the shape) via **`updateApplicationContext`** (always-latest, coalescing), with **`transferUserInfo`** as the durable fallback when the context payload is rejected (too large / not yet paired). The snapshot carries each task's fields + **raw `scheduleData`** (decoded on the watch via `ScheduleType.decode`, so a corrupt payload quarantines to `.needsRepair` identically to the phone), the privacy-mode flag, and the `SchedulerSettings` — so the watch plans identically. A **`schemaVersion`** field is present now; a watch that receives a **newer** version shows an "update the app" state, never crashes or misrenders.
+- **Actions (watch → phone).** Given/Done, Snooze, Skip Once (Pause stays phone-only) are sent via **`sendMessage`** when reachable, **`transferUserInfo`** (durable, OS-retried across launches) when not. Each action carries a unique id (idempotent apply), task id, action, timestamp, and source **"via watch"**. The watch applies each action **optimistically** to its local snapshot, **persists** it to a pending set, and shows a **pending indicator** on the affected row until a newer snapshot confirms it — **a failed/unsent action is never silently lost**.
+- **Conflict rule.** The phone orders a batch by **last-action-wins-by-timestamp**, and at an exact timestamp tie a **Given supersedes a Snooze** (`SyncConflictResolver.applicationOrder`, Core-tested). It then applies each action through the **existing `NurseStore` paths**, so TaskEvents, on-phone toasts, replanning, and the transactional-commit guarantees all apply unchanged, and re-pushes the updated snapshot.
+
+### 5.4 Watch-side notification scheduling **[wc-sync]**
+The watch schedules its **own** local notifications from the synced snapshot using the **same `NotificationPlanner`** (reused, not re-implemented) and the **same deterministic identifiers** as the phone. Cancellation flows: any action from either device replans on the phone and re-pushes the snapshot, which triggers a **cancel-all-then-reschedule** on the watch — stale pings clear on both sides. **Dedup:** identical identifiers mean **simultaneous delivery on both devices is acceptable** — no suppression is attempted. Watch notification actions (Given / Snooze / Skip Once, Snooze dominant) route through the **same action path** as taps (§5.3). Muted tasks fire nothing; privacy-mode redaction matches the phone (§6.3). Repair warnings stay a phone concern.
 
 ---
 
@@ -133,7 +143,7 @@ Custom notification interface with actions **Snooze** (dominant / first), **Give
 
 ### 6.1 Navigation **[nav]**
 Bottom tab bar: **Board**, **Schedule**, **Log**. Settings via the gear on the Board.
-(Shift Review is deferred to a later milestone.)
+**Shift Review** is launched manually from the Board toolbar (§6.4).
 
 **Navigation map (single entry point per screen; every push/sheet backs out to the Board):**
 - **Board** — the primary patient entry point.
@@ -188,7 +198,12 @@ App lock (Face ID / passcode), notification redaction in privacy mode, local-onl
 
 - **Undo from the Log (design pass, feedback pass 4 item 4).** Each `TaskEvent` captures a snapshot at action time (`previousNextDueAt`, `previousLastCompletedAt`, `previousIsPaused`, `previousExplicitSnoozeAt` — additive/migration-safe). The Log offers **Undo** (swipe + inline button) on a task's **most-recent** event, valid only while it's still the latest event, the task still exists, and a snapshot was captured. Undo **restores the snapshot exactly** (no recomputed guesses), replans, and does **not** delete the original — it marks it **reverted** (struck through in the Log) and records a `.undone` event referencing it, so the shift log stays a truthful history of mistakes and corrections. Undoable: Given/Done, Skip, Pause, **Resume** (Resume is now logged as `.resumed`). Undo of Delete is **not** supported (deletion is warned, item 1). A haptic + "Undone · next due …" toast confirms, sourced from post-commit state. Core adds `.resumed` + `.undone` TaskActions (tested).
 
-### 6.4 Shift Review flow / 6.5 Overdue & missed handling — as v1.0.
+### 6.4 Shift Review flow **[shift-review]**
+**"Start Shift Review"** on the Board toolbar (shown when there are active patients) steps through **each active patient** (the active set is captured when review begins, so discharging one mid-review doesn't reshuffle the remaining steps). For each: **Keep** (with an optional **quick-edit** of tasks/times via the patient detail), **Discharge**, or **Skip for now**. It ends with a **summary** — active patients, active tasks, first due (+ discharged count).
+- **Discharge** soft-archives the patient (`NurseStore.dischargePatient`), **reusing the task-level archive pattern rather than a hard delete**: the patient leaves the active lists and **all its tasks are excluded from planning** (`planningTasks()` feeds only active patients, so the `commit()`→`replan()` cancels their pending notifications), while the patient, its tasks, and every `TaskEvent` **survive** (history retained). Discharged patients live in the **inactive-patients Archive** list (Board footer / empty-state link), **restorable**; auto-purge stays deferred. Core pins the exclusion invariant with tests.
+- **Deferred:** the optional auto-prompt at `shiftStartHour` — manual trigger only for now.
+
+### 6.5 Overdue & missed handling — as v1.0.
 
 ---
 

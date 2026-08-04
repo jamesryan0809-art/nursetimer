@@ -14,13 +14,19 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<!-- Modern single-target watchOS app that requires the paired iPhone app. -->
+
 	<key>WKApplication</key>
 	<true/>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>com.nursetimer.app</string>
 	<key>WKRunsIndependentlyOfCompanionApp</key>
 	<false/>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
+	
 </dict>
 </plist>

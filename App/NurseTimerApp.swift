@@ -9,21 +9,27 @@ final class AppModel {
     let store: NurseStore
     let scheduler: NotificationScheduler
     let coordinator: NotificationCoordinator
+    let watchSync: WatchSyncCoordinator
     let lock = AppLockController()
     var notificationsDenied = false
 
     init(container: ModelContainer, store: NurseStore,
-         scheduler: NotificationScheduler, coordinator: NotificationCoordinator) {
+         scheduler: NotificationScheduler, coordinator: NotificationCoordinator,
+         watchSync: WatchSyncCoordinator) {
         self.container = container
         self.store = store
         self.scheduler = scheduler
         self.coordinator = coordinator
+        self.watchSync = watchSync
     }
 
     func start() async {
         let settings = store.settings()
         lock.configure(enabled: settings.appLockEnabled, timeoutMinutes: settings.appLockTimeoutMinutes)
         lock.lockIfEnabled()
+        // Activate the watch link before the first replan so the initial snapshot is pushed
+        // as soon as the session activates (§5.3 — snapshot on first install).
+        watchSync.activate()
         let granted = await scheduler.requestAuthorization()
         notificationsDenied = !granted
         if !granted { store.banner = .notificationsDenied() }
@@ -55,8 +61,11 @@ struct NurseTimerApp: App {
         let store = NurseStore(context: container.mainContext, scheduler: scheduler)
         let coordinator = NotificationCoordinator(store: store)
         scheduler.attachDelegate(coordinator)
+        let watchSync = WatchSyncCoordinator(store: store)
+        store.onReplan = { [weak watchSync] in watchSync?.pushSnapshot() }
         _app = State(initialValue: AppModel(container: container, store: store,
-                                            scheduler: scheduler, coordinator: coordinator))
+                                            scheduler: scheduler, coordinator: coordinator,
+                                            watchSync: watchSync))
     }
 
     var body: some Scene {

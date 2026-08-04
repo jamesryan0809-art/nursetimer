@@ -30,8 +30,19 @@ struct NurseTimerProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<NurseTimerEntry>) -> Void) {
-        // No shared-state data source yet → report not-synced, don't invent data.
-        completion(Timeline(entries: [.unavailable(Date())], policy: .never))
+        // Read the latest synced summary the watch app wrote to the App Group (§5.1/§5.3).
+        let now = Date()
+        if let summary = ComplicationStore.read(), ComplicationStore.isFresh(summary, now: now) {
+            let entry = NurseTimerEntry(date: now, isSynced: true, overdueCount: summary.overdueCount,
+                                        nextRoom: summary.nextRoom, nextTime: summary.nextTime)
+            // Refresh at the next due time so the count/overdue rolls over without an app launch.
+            let refresh = summary.nextTime.map { max($0, now.addingTimeInterval(60)) }
+                ?? now.addingTimeInterval(15 * 60)
+            completion(Timeline(entries: [entry], policy: .after(refresh)))
+        } else {
+            // No fresh snapshot → report not-synced honestly, don't invent data.
+            completion(Timeline(entries: [.unavailable(now)], policy: .after(now.addingTimeInterval(15 * 60))))
+        }
     }
 }
 
