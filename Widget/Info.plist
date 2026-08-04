@@ -17,5 +17,7 @@
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.widgetkit-extension</string>
 	</dict>
+	<key>CFBundleDisplayName</key>
+	<string>Nurse Timer</string>
 </dict>
 </plist>
