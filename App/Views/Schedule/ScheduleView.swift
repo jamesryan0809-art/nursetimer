@@ -21,7 +21,9 @@ struct ScheduleView: View {
     @Environment(NurseStore.self) private var store
     @Query private var tasks: [CareTask]
     @Query private var patients: [Patient]
-    @State private var mode: ScheduleMode = .byTime
+    // Grid is the default for a fresh install / no persisted value (user decision); a persisted
+    // choice overrides it on `.onAppear` below.
+    @State private var mode: ScheduleMode = .grid
 
     private var settings: AppSettings { store.settings() }
     private var activeTasks: [CareTask] { tasks.filter { $0.patient?.isActive == true && !$0.isArchived } }
@@ -93,7 +95,7 @@ struct ScheduleView: View {
                 }
             }
             // Persist the last-used mode in AppSettings (item 1).
-            .onAppear { mode = ScheduleMode(rawValue: settings.scheduleModeRaw) ?? .byTime }
+            .onAppear { mode = ScheduleMode(rawValue: settings.scheduleModeRaw) ?? .grid }
             .onChange(of: mode) { _, newMode in
                 settings.scheduleModeRaw = newMode.rawValue
                 store.persistPreferences()

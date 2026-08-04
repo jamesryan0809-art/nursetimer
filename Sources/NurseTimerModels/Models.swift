@@ -252,7 +252,7 @@ public final class AppSettings {
     public var shiftStartHour: Int?
     /// Last-used Schedule tab mode ("byTime" / "byPatient" / "grid"). Property-level default
     /// keeps this migration-safe for an existing store.
-    public var scheduleModeRaw: String = "byTime"
+    public var scheduleModeRaw: String = "Grid"
     /// Board sort ("nextDue" / "roomAsc" / "roomDesc"), feedback pass 4 item 6. Migration-safe
     /// property-level default.
     public var boardSortRaw: String = "nextDue"
@@ -264,7 +264,7 @@ public final class AppSettings {
         appLockEnabled: Bool = true,
         appLockTimeoutMinutes: Int = 5,
         shiftStartHour: Int? = nil,
-        scheduleModeRaw: String = "byTime",
+        scheduleModeRaw: String = "Grid",
         boardSortRaw: String = "nextDue"
     ) {
         self.defaultLeadTimeMinutes = defaultLeadTimeMinutes
